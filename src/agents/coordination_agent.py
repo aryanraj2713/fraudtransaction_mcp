@@ -73,6 +73,24 @@ class CoordinationAgent(BaseAgent):
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
             confidence = coordinated_result.get("confidence", 0.5)
             
+            # Log coordination results with structured data
+            transaction_id = input_data.get("transaction", {}).get("transaction_id", "unknown")
+            logger.info(
+                "🤝 Agent coordination completed",
+                extra={
+                    "agent_id": self.agent_id,
+                    "transaction_id": transaction_id,
+                    "task_id": task_id,
+                    "coordination_strategy": self.current_strategy,
+                    "participating_agents": [agent.agent_id for agent in participating_agents],
+                    "fraud_score": coordinated_result.get("fraud_score", 0.0),
+                    "decision": coordinated_result.get("decision", "unknown"),
+                    "confidence": confidence,
+                    "processing_time_ms": processing_time,
+                    "event": "agent_coordination_complete"
+                }
+            )
+            
             result = {
                 "task_id": task_id,
                 "agent_id": self.agent_id,
@@ -273,10 +291,10 @@ class CoordinationAgent(BaseAgent):
             score = result.get("fraud_score", result.get("composite_risk_score", result.get("pattern_risk_score", 0.5)))
             fraud_scores.append(score)
             
-            # Determine decision based on score
-            if score > 0.7:
+            # Determine decision based on score (more sensitive thresholds)
+            if score > 0.6:
                 decisions.append("decline")
-            elif score > 0.5:
+            elif score > 0.3:
                 decisions.append("review")
             else:
                 decisions.append("approve")

@@ -22,6 +22,7 @@ from .agents.risk_assessment_agent import RiskAssessmentAgent
 from .agents.coordination_agent import CoordinationAgent
 from .utils.synthetic_data import SyntheticDataGenerator
 from .schemas.transaction_schema import TransactionSchema
+from .utils.config import config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -68,6 +69,9 @@ class FraudTestResponse(BaseModel):
 async def startup_event():
     """Initialize the fraud detection system"""
     global pattern_agent, risk_agent, coordination_agent, data_generator
+    
+    # Configure Logfire for observability
+    config.configure_logfire()
     
     logger.info("🚀 Initializing Fraud Detection System...")
     
@@ -461,6 +465,19 @@ async def analyze_transaction(transaction_input: TransactionInput):
             "status": "pending"
         }
         
+        # Log transaction analysis start with structured data
+        logger.info(
+            "🔍 Starting fraud analysis",
+            extra={
+                "transaction_id": transaction_data["transaction_id"],
+                "amount": transaction_input.amount,
+                "merchant_category": transaction_input.merchant_category,
+                "country": transaction_input.country,
+                "hour_of_day": transaction_input.hour_of_day,
+                "event": "fraud_analysis_start"
+            }
+        )
+        
         # Process through coordination agent
         coord_input = {
             "transaction": transaction_data,
@@ -485,6 +502,22 @@ async def analyze_transaction(transaction_input: TransactionInput):
         
         # Generate explanation
         explanation = await _generate_explanation(transaction_data, coordinated_decision, coord_result)
+        
+        # Log fraud analysis result with structured data
+        logger.info(
+            "✅ Fraud analysis completed",
+            extra={
+                "transaction_id": transaction_data["transaction_id"],
+                "fraud_score": coordinated_decision.get("fraud_score", 0.0),
+                "decision": coordinated_decision.get("decision", "approve"),
+                "confidence": coordinated_decision.get("confidence", 0.0),
+                "processing_time_ms": processing_time,
+                "risk_factors": list(set(risk_factors)),
+                "coordination_strategy": coord_result.get("coordination_strategy", "unknown"),
+                "participating_agents": coord_result.get("participating_agents", []),
+                "event": "fraud_analysis_complete"
+            }
+        )
         
         return FraudTestResponse(
             transaction_id=transaction_data["transaction_id"],

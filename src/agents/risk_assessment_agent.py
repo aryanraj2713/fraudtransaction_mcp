@@ -25,20 +25,26 @@ class RiskAssessmentAgent(BaseAgent):
         """Initialize risk assessment models"""
         self.risk_models = {
             "amount_risk": {
-                "thresholds": {"low": 100, "medium": 1000, "high": 5000, "critical": 10000},
-                "weights": {"low": 0.1, "medium": 0.3, "high": 0.6, "critical": 0.9}
+                "thresholds": {"low": 50, "medium": 500, "high": 2000, "critical": 5000},
+                "weights": {"low": 0.1, "medium": 0.4, "high": 0.7, "critical": 0.9}
             },
             "velocity_risk": {
-                "thresholds": {"tx_1h": 3, "tx_24h": 10, "amount_1h": 5000},
+                "thresholds": {"tx_1h": 3, "tx_24h": 10, "amount_1h": 2000},
                 "weights": {"tx_1h": 0.4, "tx_24h": 0.3, "amount_1h": 0.3}
             },
             "geographic_risk": {
-                "high_risk_countries": ["country_x", "country_y"],
-                "risk_scores": {"unknown": 0.5, "domestic": 0.1, "high_risk": 0.8}
+                "high_risk_countries": ["NG", "PK", "RU", "CN", "IR", "KP", "AF", "SY"],
+                "medium_risk_countries": ["IN", "BR", "MX", "TR", "EG", "ID"],
+                "risk_scores": {"unknown": 0.6, "domestic": 0.1, "medium_risk": 0.5, "high_risk": 0.8}
             },
             "temporal_risk": {
-                "high_risk_hours": list(range(0, 6)) + list(range(23, 24)),
-                "weekend_multiplier": 1.2
+                "high_risk_hours": list(range(0, 6)) + list(range(22, 24)),
+                "weekend_multiplier": 1.3
+            },
+            "merchant_risk": {
+                "high_risk_categories": ["cryptocurrency", "gambling", "money_transfer", "adult", "cash_advance"],
+                "medium_risk_categories": ["online", "travel", "electronics"],
+                "risk_scores": {"high_risk": 0.7, "medium_risk": 0.4, "low_risk": 0.1}
             }
         }
     
@@ -59,6 +65,7 @@ class RiskAssessmentAgent(BaseAgent):
             velocity_risk = await self._assess_velocity_risk(context_data, reasoning_chain)
             geographic_risk = await self._assess_geographic_risk(transaction_data, reasoning_chain)
             temporal_risk = await self._assess_temporal_risk(transaction_data, reasoning_chain)
+            merchant_risk = await self._assess_merchant_risk(transaction_data, reasoning_chain)
             behavioral_risk = await self._assess_behavioral_risk(transaction_data, user_profile, reasoning_chain)
             
             # Calculate composite risk score
@@ -67,6 +74,7 @@ class RiskAssessmentAgent(BaseAgent):
                 "velocity": velocity_risk,
                 "geographic": geographic_risk,
                 "temporal": temporal_risk,
+                "merchant": merchant_risk,
                 "behavioral": behavioral_risk
             }, reasoning_chain)
             
@@ -102,6 +110,7 @@ class RiskAssessmentAgent(BaseAgent):
                     "velocity_risk": velocity_risk,
                     "geographic_risk": geographic_risk,
                     "temporal_risk": temporal_risk,
+                    "merchant_risk": merchant_risk,
                     "behavioral_risk": behavioral_risk
                 },
                 "confidence_interval": confidence_interval,
@@ -286,6 +295,10 @@ class RiskAssessmentAgent(BaseAgent):
             risk_score = model["risk_scores"]["high_risk"]
             risk_level = "high"
             reasoning = f"Transaction from high-risk country: {country}"
+        elif country in model["medium_risk_countries"]:
+            risk_score = model["risk_scores"]["medium_risk"]
+            risk_level = "medium"
+            reasoning = f"Transaction from medium-risk country: {country}"
         else:
             risk_score = model["risk_scores"]["domestic"]
             risk_level = "low"
@@ -355,6 +368,39 @@ class RiskAssessmentAgent(BaseAgent):
             "reasoning": reasoning_step["reasoning"]
         }
     
+    async def _assess_merchant_risk(self, transaction_data: Dict[str, Any], reasoning_chain: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Assess risk based on merchant category"""
+        merchant_category = transaction_data.get("merchant_category", "unknown")
+        model = self.risk_models["merchant_risk"]
+        
+        if merchant_category in model["high_risk_categories"]:
+            risk_score = model["risk_scores"]["high_risk"]
+            risk_level = "high"
+            reasoning = f"High-risk merchant category: {merchant_category}"
+        elif merchant_category in model["medium_risk_categories"]:
+            risk_score = model["risk_scores"]["medium_risk"]
+            risk_level = "medium"
+            reasoning = f"Medium-risk merchant category: {merchant_category}"
+        else:
+            risk_score = model["risk_scores"]["low_risk"]
+            risk_level = "low"
+            reasoning = f"Low-risk merchant category: {merchant_category}"
+        
+        reasoning_step = {
+            "factor": "merchant_risk",
+            "reasoning": reasoning,
+            "risk_score": risk_score,
+            "evidence": {"merchant_category": merchant_category, "risk_level": risk_level}
+        }
+        reasoning_chain.append(reasoning_step)
+        
+        return {
+            "score": risk_score,
+            "merchant_category": merchant_category,
+            "risk_level": risk_level,
+            "reasoning": reasoning
+        }
+    
     async def _assess_behavioral_risk(self, transaction_data: Dict[str, Any], user_profile: Dict[str, Any], reasoning_chain: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Assess risk based on behavioral patterns"""
         if not user_profile:
@@ -420,11 +466,12 @@ class RiskAssessmentAgent(BaseAgent):
         """Calculate composite risk score from individual components"""
         # Default weights for risk components
         default_weights = {
-            "amount": 0.25,
-            "velocity": 0.25,
+            "amount": 0.20,
+            "velocity": 0.20,
             "geographic": 0.20,
             "temporal": 0.15,
-            "behavioral": 0.15
+            "merchant": 0.15,
+            "behavioral": 0.10
         }
         
         # Use learned weights if available

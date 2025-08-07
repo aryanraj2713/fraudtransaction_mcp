@@ -21,6 +21,7 @@ class PatternRecognitionAgent(BaseAgent):
         self.pattern_frequency: Dict[str, int] = defaultdict(int)
         self.suspicious_patterns: List[Dict[str, Any]] = []
         self.pattern_evolution_tracker: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self._initialize_base_patterns()
         
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze input data to discover and recognize fraud patterns"""
@@ -285,7 +286,7 @@ class PatternRecognitionAgent(BaseAgent):
                 })
             
             # Detect high-risk country patterns
-            high_risk_countries = ["country_a", "country_b", "country_c"]  # Placeholder
+            high_risk_countries = ["NG", "PK", "RU", "CN", "IR", "KP", "AF", "SY"]
             if current_country in high_risk_countries:
                 patterns.append({
                     "pattern_type": "high_risk_country",
@@ -353,22 +354,78 @@ class PatternRecognitionAgent(BaseAgent):
         """Recognize existing patterns in transaction data"""
         recognized = []
         
-        # Create transaction description for similarity search
-        transaction_text = self._transaction_to_text(transaction_data)
+        # Extract transaction features
+        amount = transaction_data.get("amount", 0)
+        merchant_category = transaction_data.get("merchant_category", "")
+        country = transaction_data.get("location", {}).get("country", "")
+        timestamp = transaction_data.get("timestamp", "")
         
-        # Search for similar patterns in vector database
-        similar_patterns = self.vector_db.search_similar_patterns(transaction_text, top_k=5, threshold=0.7)
+        # Parse hour if timestamp available
+        hour = None
+        if timestamp:
+            try:
+                tx_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                hour = tx_time.hour
+            except:
+                pass
+        
+        # Check each known pattern for explicit matches
+        for pattern_id, pattern in self.known_patterns.items():
+            match_strength = 0.0
+            matched_features = []
+            
+            features = pattern.get("features", {})
+            
+            # Check merchant category match
+            if "merchant_category" in features and features["merchant_category"] == merchant_category:
+                match_strength += 0.4
+                matched_features.append("merchant_category")
+            
+            # Check amount threshold
+            if "amount_threshold" in features and amount >= features["amount_threshold"]:
+                match_strength += 0.3
+                matched_features.append("amount_threshold")
+            
+            # Check high-risk countries
+            if "high_risk_countries" in features and country in features["high_risk_countries"]:
+                match_strength += 0.4
+                matched_features.append("high_risk_country")
+            
+            # Check night hours
+            if "night_hours" in features and hour is not None and hour in features["night_hours"]:
+                match_strength += 0.3
+                matched_features.append("night_hours")
+            
+            # If we have a significant match, add it
+            if match_strength >= 0.3:  # Lower threshold for matching
+                recognized.append({
+                    "pattern_id": pattern_id,
+                    "pattern_type": pattern.get("pattern_type", "unknown"),
+                    "similarity_score": match_strength,
+                    "confidence": pattern.get("confidence", 0.5),
+                    "risk_score": pattern.get("risk_score", 0.5),
+                    "description": pattern.get("description", ""),
+                    "match_strength": match_strength * pattern.get("confidence", 0.5),
+                    "matched_features": matched_features
+                })
+        
+        # Also do vector similarity search as backup
+        transaction_text = self._transaction_to_text(transaction_data)
+        similar_patterns = self.vector_db.search_similar_patterns(transaction_text, top_k=3, threshold=0.6)
         
         for pattern_id, similarity, pattern_data in similar_patterns:
-            recognized.append({
-                "pattern_id": pattern_id,
-                "pattern_type": pattern_data.get("pattern_type", "unknown"),
-                "similarity_score": similarity,
-                "confidence": pattern_data.get("confidence", 0.5),
-                "risk_score": pattern_data.get("risk_score", 0.5),
-                "description": pattern_data.get("description", ""),
-                "match_strength": similarity * pattern_data.get("confidence", 0.5)
-            })
+            # Avoid duplicates
+            if not any(p["pattern_id"] == pattern_id for p in recognized):
+                recognized.append({
+                    "pattern_id": pattern_id,
+                    "pattern_type": pattern_data.get("pattern_type", "unknown"),
+                    "similarity_score": similarity,
+                    "confidence": pattern_data.get("confidence", 0.5),
+                    "risk_score": pattern_data.get("risk_score", 0.5),
+                    "description": pattern_data.get("description", ""),
+                    "match_strength": similarity * pattern_data.get("confidence", 0.5),
+                    "matched_features": ["vector_similarity"]
+                })
         
         return recognized
     
@@ -514,3 +571,64 @@ class PatternRecognitionAgent(BaseAgent):
             "vector_db_stats": self.vector_db.get_stats(),
             "suspicious_patterns": len(self.suspicious_patterns)
         }
+    
+    def _initialize_base_patterns(self):
+        """Initialize the agent with basic fraud patterns"""
+        base_patterns = [
+            {
+                "pattern_id": "high_amount_crypto",
+                "pattern_type": "amount_merchant",
+                "description": "High amount cryptocurrency transactions",
+                "risk_score": 0.8,
+                "confidence": 0.9,
+                "features": {
+                    "merchant_category": "cryptocurrency",
+                    "amount_threshold": 2000,
+                    "risk_factors": ["high_amount", "crypto"]
+                }
+            },
+            {
+                "pattern_id": "night_high_risk_country",
+                "pattern_type": "temporal_geographic",
+                "description": "Night transactions from high-risk countries",
+                "risk_score": 0.9,
+                "confidence": 0.85,
+                "features": {
+                    "high_risk_countries": ["NG", "PK", "RU"],
+                    "night_hours": [22, 23, 0, 1, 2, 3, 4, 5],
+                    "risk_factors": ["night_time", "high_risk_location"]
+                }
+            },
+            {
+                "pattern_id": "gambling_large_amount",
+                "pattern_type": "merchant_amount",
+                "description": "Large gambling transactions",
+                "risk_score": 0.7,
+                "confidence": 0.8,
+                "features": {
+                    "merchant_category": "gambling",
+                    "amount_threshold": 1000,
+                    "risk_factors": ["gambling", "high_amount"]
+                }
+            },
+            {
+                "pattern_id": "money_transfer_suspicious",
+                "pattern_type": "merchant_geographic",
+                "description": "Money transfers to high-risk countries",
+                "risk_score": 0.8,
+                "confidence": 0.9,
+                "features": {
+                    "merchant_category": "money_transfer",
+                    "high_risk_countries": ["NG", "PK", "AF"],
+                    "risk_factors": ["money_transfer", "high_risk_destination"]
+                }
+            }
+        ]
+        
+        for pattern in base_patterns:
+            pattern_id = pattern["pattern_id"]
+            self.known_patterns[pattern_id] = pattern
+            
+            # Add to vector database
+            pattern_text = self._pattern_to_text(pattern)
+            self.vector_db.add_pattern(pattern_id, pattern_text, pattern)
