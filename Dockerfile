@@ -36,6 +36,7 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 # Copy application code
 COPY src/ ./src/
 COPY demo.py .
+COPY simple_demo.py .
 COPY env.example .env
 
 # Set ownership
@@ -44,10 +45,10 @@ USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import asyncio; from src.fraud_detection_system import get_fraud_detection_system; asyncio.run(get_fraud_detection_system())" || exit 1
+    CMD curl -f http://localhost:8000/system-status || exit 1
 
 # Expose port
 EXPOSE 8000
 
-# Default command
-CMD ["python", "demo.py", "--demo", "all"]
+# Default command - run web interface
+CMD ["python", "-m", "uvicorn", "src.web_interface:app", "--host", "0.0.0.0", "--port", "8000"]
