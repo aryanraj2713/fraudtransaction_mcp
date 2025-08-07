@@ -5,7 +5,8 @@ __pycache__/
 
 # C extensions
 *.so
-
+fraud-detection-key.pem
+aws.sh
 # Distribution / packaging
 .Python
 build/
