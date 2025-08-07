@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-detection-system-service
+  namespace: fraud-detection
+  labels:
+    app: fraud-detection-system
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: fraud-detection-system
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-intelligence-service
+  namespace: fraud-detection
+  labels:
+    app: data-intelligence-server
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+    name: mcp
+  selector:
+    app: data-intelligence-server
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-orchestration-service
+  namespace: fraud-detection
+  labels:
+    app: model-orchestration-server
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8002
+    targetPort: 8002
+    protocol: TCP
+    name: mcp
+  selector:
+    app: model-orchestration-server
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: decision-engine-service
+  namespace: fraud-detection
+  labels:
+    app: decision-engine-server
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8003
+    targetPort: 8003
+    protocol: TCP
+    name: mcp
+  selector:
+    app: decision-engine-server
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: monitoring-service
+  namespace: fraud-detection
+  labels:
+    app: monitoring-server
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8004
+    targetPort: 8004
+    protocol: TCP
+    name: mcp
+  selector:
+    app: monitoring-server
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: fraud-detection
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app: redis
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-db-service
+  namespace: fraud-detection
+  labels:
+    app: vector-db
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8100
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: vector-db

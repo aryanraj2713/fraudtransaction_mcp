@@ -1,0 +1,254 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-detection-system
+  namespace: fraud-detection
+  labels:
+    app: fraud-detection-system
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fraud-detection-system
+  template:
+    metadata:
+      labels:
+        app: fraud-detection-system
+    spec:
+      containers:
+      - name: fraud-detection-system
+        image: fraud-detection-system:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: fraud-detection-secrets
+              key: openai-api-key
+        - name: LOGFIRE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: fraud-detection-secrets
+              key: logfire-token
+        - name: MCP_SERVER_HOST
+          value: "0.0.0.0"
+        - name: FRAUD_THRESHOLD
+          value: "0.7"
+        - name: VECTOR_DB_SIZE
+          value: "10000"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: models-volume
+          mountPath: /app/models
+      volumes:
+      - name: logs-volume
+        emptyDir: {}
+      - name: models-volume
+        persistentVolumeClaim:
+          claimName: models-pvc
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-intelligence-server
+  namespace: fraud-detection
+  labels:
+    app: data-intelligence-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: data-intelligence-server
+  template:
+    metadata:
+      labels:
+        app: data-intelligence-server
+    spec:
+      containers:
+      - name: data-intelligence-server
+        image: fraud-detection-system:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8001
+          name: mcp
+        env:
+        - name: MCP_SERVER_HOST
+          value: "0.0.0.0"
+        - name: MCP_SERVER_PORT
+          value: "8001"
+        command: ["python", "-m", "src.servers.data_intelligence_server"]
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "125m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-orchestration-server
+  namespace: fraud-detection
+  labels:
+    app: model-orchestration-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: model-orchestration-server
+  template:
+    metadata:
+      labels:
+        app: model-orchestration-server
+    spec:
+      containers:
+      - name: model-orchestration-server
+        image: fraud-detection-system:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8002
+          name: mcp
+        env:
+        - name: MCP_SERVER_HOST
+          value: "0.0.0.0"
+        - name: MCP_SERVER_PORT
+          value: "8002"
+        command: ["python", "-m", "src.servers.model_orchestration_server"]
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: models-volume
+          mountPath: /app/models
+      volumes:
+      - name: models-volume
+        persistentVolumeClaim:
+          claimName: models-pvc
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decision-engine-server
+  namespace: fraud-detection
+  labels:
+    app: decision-engine-server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: decision-engine-server
+  template:
+    metadata:
+      labels:
+        app: decision-engine-server
+    spec:
+      containers:
+      - name: decision-engine-server
+        image: fraud-detection-system:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8003
+          name: mcp
+        env:
+        - name: MCP_SERVER_HOST
+          value: "0.0.0.0"
+        - name: MCP_SERVER_PORT
+          value: "8003"
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: fraud-detection-secrets
+              key: openai-api-key
+        command: ["python", "-m", "src.servers.decision_engine_server"]
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "125m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitoring-server
+  namespace: fraud-detection
+  labels:
+    app: monitoring-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: monitoring-server
+  template:
+    metadata:
+      labels:
+        app: monitoring-server
+    spec:
+      containers:
+      - name: monitoring-server
+        image: fraud-detection-system:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8004
+          name: mcp
+        env:
+        - name: MCP_SERVER_HOST
+          value: "0.0.0.0"
+        - name: MCP_SERVER_PORT
+          value: "8004"
+        - name: LOGFIRE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: fraud-detection-secrets
+              key: logfire-token
+        command: ["python", "-m", "src.servers.monitoring_server"]
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "125m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        volumeMounts:
+        - name: logs-volume
+          mountPath: /app/logs
+      volumes:
+      - name: logs-volume
+        emptyDir: {}
