@@ -154,19 +154,7 @@ fraud-detection-system/
 └── README.md
 ```
 
-## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details.
-
----
 
 **🎉 Ready to detect fraud with AI?** 
 
