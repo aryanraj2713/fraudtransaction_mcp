@@ -634,7 +634,7 @@ class ModelOrchestrationServer(BaseMCPServer):
         }
         
         # Initialize OpenAI (if API key available)
-        openai.api_key = os.getenv("OPENAI_API_KEY", "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")
+        openai.api_key = os.getenv("OPENAI_API_KEY")
     
     async def initialize(self):
         """Initialize the Model Orchestration server."""

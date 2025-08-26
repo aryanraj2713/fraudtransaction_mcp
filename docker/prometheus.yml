@@ -1,0 +1,69 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Main fraud detection system
+  - job_name: 'fraud-detection-system'
+    static_configs:
+      - targets: ['fraud-detection-system:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Data Intelligence MCP Server
+  - job_name: 'data-intelligence-server'
+    static_configs:
+      - targets: ['data-intelligence-server:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Model Orchestration MCP Server
+  - job_name: 'model-orchestration-server'
+    static_configs:
+      - targets: ['model-orchestration-server:8002']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Decision Engine MCP Server
+  - job_name: 'decision-engine-server'
+    static_configs:
+      - targets: ['decision-engine-server:8003']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Monitoring MCP Server
+  - job_name: 'monitoring-server'
+    static_configs:
+      - targets: ['monitoring-server:8004']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Redis monitoring
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+
+  # PostgreSQL monitoring
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+
+  # nginx monitoring
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
