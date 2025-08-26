@@ -1,634 +1,739 @@
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
 import numpy as np
-import json
+from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict, Counter
+import hashlib
+from dataclasses import dataclass
 
-from .base_agent import BaseAgent
-from ..utils.vector_db import InMemoryVectorDB
+from .base_agent import BaseFraudDetectionAgent
+from core.mcp_client import MCPClient
 
 logger = logging.getLogger(__name__)
 
-class PatternRecognitionAgent(BaseAgent):
-    """Agent specialized in discovering and analyzing fraud patterns"""
+
+@dataclass
+class FraudPattern:
+    pattern_id: str
+    pattern_type: str
+    features: Dict[str, Any]
+    confidence: float
+    support_count: int
+    accuracy_rate: float
+    discovered_at: datetime
+    last_seen: datetime
+
+
+class PatternMiner:
+    """Advanced pattern mining for fraud detection."""
     
-    def __init__(self, agent_id: str = "pattern_recognition_001"):
-        super().__init__(agent_id, "pattern_recognition")
-        self.vector_db = InMemoryVectorDB()
-        self.known_patterns: Dict[str, Dict[str, Any]] = {}
-        self.pattern_frequency: Dict[str, int] = defaultdict(int)
-        self.suspicious_patterns: List[Dict[str, Any]] = []
-        self.pattern_evolution_tracker: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-        self._initialize_base_patterns()
-        
-    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze input data to discover and recognize fraud patterns"""
-        start_time = datetime.utcnow()
-        
-        try:
-            # Extract transaction data
-            transaction_data = input_data.get("transaction", {})
-            historical_data = input_data.get("historical_data", [])
-            
-            # Discover new patterns
-            new_patterns = await self._discover_patterns(transaction_data, historical_data)
-            
-            # Recognize existing patterns
-            recognized_patterns = await self._recognize_patterns(transaction_data)
-            
-            # Analyze pattern evolution
-            evolution_analysis = await self._analyze_pattern_evolution()
-            
-            # Calculate risk score based on patterns
-            pattern_risk_score = await self._calculate_pattern_risk(recognized_patterns, new_patterns)
-            
-            # Generate insights
-            insights = await self._generate_pattern_insights(new_patterns, recognized_patterns)
-            
-            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            confidence = self._calculate_confidence({
-                "data_quality": len(transaction_data) / 10,  # Normalize by expected fields
-                "pattern_match": len(recognized_patterns) / 5,  # Normalize by typical pattern count
-                "historical_accuracy": self.performance_metrics["correct_decisions"] / max(1, self.performance_metrics["total_decisions"])
-            })
-            
-            result = {
-                "agent_id": self.agent_id,
-                "new_patterns_discovered": len(new_patterns),
-                "recognized_patterns": recognized_patterns,
-                "new_patterns": new_patterns,
-                "pattern_risk_score": pattern_risk_score,
-                "evolution_analysis": evolution_analysis,
-                "insights": insights,
-                "confidence": confidence,
-                "processing_time_ms": processing_time
-            }
-            
-            await self.record_decision(input_data, result, processing_time, confidence)
-            return result
-            
-        except Exception as e:
-            logger.error(f"Pattern recognition processing failed: {str(e)}")
-            return {
-                "agent_id": self.agent_id,
-                "error": str(e),
-                "confidence": 0.0
-            }
+    def __init__(self):
+        self.transaction_sequences: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        self.pattern_cache: Dict[str, FraudPattern] = {}
+        self.min_support = 3  # Minimum occurrences to consider a pattern
+        self.confidence_threshold = 0.6
     
-    async def learn(self, feedback: Dict[str, Any]) -> None:
-        """Learn from feedback to improve pattern recognition"""
-        try:
-            pattern_id = feedback.get("pattern_id")
-            was_accurate = feedback.get("was_accurate", False)
-            actual_fraud = feedback.get("actual_fraud", False)
-            
-            if pattern_id and pattern_id in self.known_patterns:
-                pattern = self.known_patterns[pattern_id]
-                
-                # Update pattern confidence based on feedback
-                if was_accurate:
-                    pattern["confidence"] = min(1.0, pattern["confidence"] + 0.05)
-                    pattern["true_positives"] = pattern.get("true_positives", 0) + (1 if actual_fraud else 0)
-                else:
-                    pattern["confidence"] = max(0.0, pattern["confidence"] - 0.1)
-                    pattern["false_positives"] = pattern.get("false_positives", 0) + (1 if not actual_fraud else 0)
-                
-                pattern["last_updated"] = datetime.utcnow().isoformat()
-                
-                # Update vector database representation
-                pattern_text = self._pattern_to_text(pattern)
-                self.vector_db.update_pattern(pattern_id, pattern_text, pattern)
-                
-                logger.info(f"Updated pattern {pattern_id} confidence to {pattern['confidence']:.3f}")
-            
-        except Exception as e:
-            logger.error(f"Pattern learning failed: {str(e)}")
-    
-    async def get_reasoning(self, input_data: Dict[str, Any]) -> str:
-        """Get human-readable reasoning for pattern recognition decisions"""
-        transaction = input_data.get("transaction", {})
+    async def mine_sequential_patterns(self, transactions: List[Dict[str, Any]]) -> List[FraudPattern]:
+        """Mine sequential patterns from transaction data."""
         
-        reasoning_prompt = f"""
-        Explain the pattern recognition analysis for this transaction:
-        
-        Transaction Details:
-        - Amount: ${transaction.get('amount', 0):,.2f}
-        - Time: {transaction.get('timestamp', 'unknown')}
-        - Merchant: {transaction.get('merchant_category', 'unknown')}
-        - Location: {transaction.get('location', {}).get('country', 'unknown')}
-        
-        Known Patterns: {len(self.known_patterns)}
-        Recent Suspicious Patterns: {len(self.suspicious_patterns)}
-        
-        Provide a clear explanation of what patterns were detected and why they might indicate fraud risk.
-        """
-        
-        ai_reasoning = await self._generate_ai_response(reasoning_prompt, max_tokens=300)
-        
-        if ai_reasoning:
-            return ai_reasoning
-        
-        # Fallback reasoning
-        return f"Pattern analysis complete. Analyzed {len(self.known_patterns)} known patterns and discovered new patterns based on transaction characteristics."
-    
-    async def _discover_patterns(self, transaction_data: Dict[str, Any], historical_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Discover new fraud patterns from transaction data"""
-        new_patterns = []
-        
-        # Amount-based pattern discovery
-        amount_patterns = await self._discover_amount_patterns(transaction_data, historical_data)
-        new_patterns.extend(amount_patterns)
-        
-        # Temporal pattern discovery
-        temporal_patterns = await self._discover_temporal_patterns(transaction_data, historical_data)
-        new_patterns.extend(temporal_patterns)
-        
-        # Geographic pattern discovery
-        geo_patterns = await self._discover_geographic_patterns(transaction_data, historical_data)
-        new_patterns.extend(geo_patterns)
-        
-        # Velocity pattern discovery
-        velocity_patterns = await self._discover_velocity_patterns(transaction_data, historical_data)
-        new_patterns.extend(velocity_patterns)
-        
-        # Store new patterns
-        for pattern in new_patterns:
-            pattern_id = f"pattern_{len(self.known_patterns) + len(new_patterns)}"
-            pattern["pattern_id"] = pattern_id
-            pattern["discovered_at"] = datetime.utcnow().isoformat()
-            pattern["confidence"] = 0.5  # Initial confidence
-            
-            # Add to knowledge base
-            self.known_patterns[pattern_id] = pattern
-            
-            # Add to vector database
-            pattern_text = self._pattern_to_text(pattern)
-            self.vector_db.add_pattern(pattern_id, pattern_text, pattern)
-        
-        return new_patterns
-    
-    async def _discover_amount_patterns(self, transaction: Dict[str, Any], historical: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Discover patterns related to transaction amounts"""
         patterns = []
-        current_amount = transaction.get("amount", 0)
         
-        if not historical:
-            return patterns
+        # Group transactions by user
+        user_transactions = defaultdict(list)
+        for tx in transactions:
+            user_id = tx.get("user_id", "unknown")
+            user_transactions[user_id].append(tx)
         
-        # Analyze amount distribution
-        amounts = [tx.get("amount", 0) for tx in historical]
+        # Sort transactions by timestamp for each user
+        for user_id, user_txs in user_transactions.items():
+            user_txs.sort(key=lambda x: x.get("timestamp", ""))
+            self.transaction_sequences[user_id] = user_txs
+        
+        # Mine patterns
+        velocity_patterns = await self._mine_velocity_patterns()
+        amount_patterns = await self._mine_amount_patterns()
+        geographic_patterns = await self._mine_geographic_patterns()
+        temporal_patterns = await self._mine_temporal_patterns()
+        
+        patterns.extend(velocity_patterns)
+        patterns.extend(amount_patterns)
+        patterns.extend(geographic_patterns)
+        patterns.extend(temporal_patterns)
+        
+        return patterns
+    
+    async def _mine_velocity_patterns(self) -> List[FraudPattern]:
+        """Mine velocity-based fraud patterns."""
+        patterns = []
+        
+        velocity_sequences = []
+        for user_id, transactions in self.transaction_sequences.items():
+            if len(transactions) < 2:
+                continue
+            
+            # Calculate transaction intervals
+            intervals = []
+            for i in range(1, len(transactions)):
+                prev_time = datetime.fromisoformat(transactions[i-1]["timestamp"])
+                curr_time = datetime.fromisoformat(transactions[i]["timestamp"])
+                interval_minutes = (curr_time - prev_time).total_seconds() / 60
+                intervals.append(interval_minutes)
+            
+            velocity_sequences.append({
+                "user_id": user_id,
+                "intervals": intervals,
+                "transaction_count": len(transactions)
+            })
+        
+        # Find rapid-fire patterns (multiple transactions in short time)
+        rapid_fire_threshold = 5  # minutes
+        rapid_sequences = [
+            seq for seq in velocity_sequences 
+            if any(interval < rapid_fire_threshold for interval in seq["intervals"])
+        ]
+        
+        if len(rapid_sequences) >= self.min_support:
+            pattern = FraudPattern(
+                pattern_id=f"velocity_rapid_fire_{hash(str(rapid_fire_threshold)) % 10000}",
+                pattern_type="velocity_rapid_fire",
+                features={
+                    "max_interval_minutes": rapid_fire_threshold,
+                    "typical_transaction_count": np.mean([seq["transaction_count"] for seq in rapid_sequences]),
+                    "affected_users": len(rapid_sequences)
+                },
+                confidence=0.8,
+                support_count=len(rapid_sequences),
+                accuracy_rate=0.0,  # Will be updated with feedback
+                discovered_at=datetime.now(),
+                last_seen=datetime.now()
+            )
+            patterns.append(pattern)
+        
+        return patterns
+    
+    async def _mine_amount_patterns(self) -> List[FraudPattern]:
+        """Mine amount-based fraud patterns."""
+        patterns = []
+        
+        # Collect all amounts
+        amounts = []
+        round_amounts = []
+        
+        for transactions in self.transaction_sequences.values():
+            for tx in transactions:
+                amount = float(tx.get("amount", 0))
+                amounts.append(amount)
+                
+                if amount == round(amount) and amount >= 100:
+                    round_amounts.append(amount)
+        
+        # Round amount pattern
+        if len(round_amounts) >= self.min_support:
+            common_round_amounts = Counter(round_amounts).most_common(5)
+            
+            pattern = FraudPattern(
+                pattern_id=f"amount_round_{hash(str(sorted(round_amounts))) % 10000}",
+                pattern_type="round_amount_testing",
+                features={
+                    "common_amounts": [amount for amount, count in common_round_amounts],
+                    "frequency": len(round_amounts) / len(amounts) if amounts else 0,
+                    "typical_range": (min(round_amounts), max(round_amounts))
+                },
+                confidence=0.6,
+                support_count=len(round_amounts),
+                accuracy_rate=0.0,
+                discovered_at=datetime.now(),
+                last_seen=datetime.now()
+            )
+            patterns.append(pattern)
+        
+        # Escalating amount pattern
+        escalating_sequences = []
+        for transactions in self.transaction_sequences.values():
+            if len(transactions) < 3:
+                continue
+            
+            amounts_seq = [float(tx.get("amount", 0)) for tx in transactions]
+            is_escalating = all(amounts_seq[i] <= amounts_seq[i+1] for i in range(len(amounts_seq)-1))
+            
+            if is_escalating and max(amounts_seq) > min(amounts_seq) * 2:
+                escalating_sequences.append(amounts_seq)
+        
+        if len(escalating_sequences) >= self.min_support:
+            pattern = FraudPattern(
+                pattern_id=f"amount_escalating_{hash(str(len(escalating_sequences))) % 10000}",
+                pattern_type="escalating_amounts",
+                features={
+                    "average_escalation_factor": np.mean([
+                        max(seq) / min(seq) for seq in escalating_sequences
+                    ]),
+                    "typical_sequence_length": np.mean([len(seq) for seq in escalating_sequences]),
+                    "sequences_found": len(escalating_sequences)
+                },
+                confidence=0.75,
+                support_count=len(escalating_sequences),
+                accuracy_rate=0.0,
+                discovered_at=datetime.now(),
+                last_seen=datetime.now()
+            )
+            patterns.append(pattern)
+        
+        return patterns
+    
+    async def _mine_geographic_patterns(self) -> List[FraudPattern]:
+        """Mine geographic fraud patterns."""
+        patterns = []
+        
+        # Collect geographic movement patterns
+        geographic_sequences = []
+        for user_id, transactions in self.transaction_sequences.items():
+            if len(transactions) < 2:
+                continue
+            
+            countries = [tx.get("country", "") for tx in transactions]
+            unique_countries = list(set(countries))
+            
+            if len(unique_countries) > 1:
+                geographic_sequences.append({
+                    "user_id": user_id,
+                    "countries": countries,
+                    "unique_countries": unique_countries,
+                    "country_changes": len(unique_countries)
+                })
+        
+        # Geographic velocity (impossible travel)
+        high_velocity_travel = [
+            seq for seq in geographic_sequences 
+            if seq["country_changes"] > 2 and len(seq["countries"]) <= 5
+        ]
+        
+        if len(high_velocity_travel) >= self.min_support:
+            pattern = FraudPattern(
+                pattern_id=f"geo_impossible_travel_{hash(str(len(high_velocity_travel))) % 10000}",
+                pattern_type="impossible_geographic_velocity",
+                features={
+                    "average_country_changes": np.mean([seq["country_changes"] for seq in high_velocity_travel]),
+                    "common_country_pairs": self._find_common_country_pairs(high_velocity_travel),
+                    "affected_users": len(high_velocity_travel)
+                },
+                confidence=0.85,
+                support_count=len(high_velocity_travel),
+                accuracy_rate=0.0,
+                discovered_at=datetime.now(),
+                last_seen=datetime.now()
+            )
+            patterns.append(pattern)
+        
+        return patterns
+    
+    async def _mine_temporal_patterns(self) -> List[FraudPattern]:
+        """Mine temporal fraud patterns."""
+        patterns = []
+        
+        # Collect transaction times
+        hour_distribution = defaultdict(int)
+        unusual_hour_transactions = []
+        
+        for transactions in self.transaction_sequences.values():
+            for tx in transactions:
+                try:
+                    hour = datetime.fromisoformat(tx["timestamp"]).hour
+                    hour_distribution[hour] += 1
+                    
+                    # Consider 2 AM - 5 AM as unusual
+                    if 2 <= hour <= 5:
+                        unusual_hour_transactions.append(tx)
+                except:
+                    continue
+        
+        # Unusual hours pattern
+        if len(unusual_hour_transactions) >= self.min_support:
+            pattern = FraudPattern(
+                pattern_id=f"temporal_unusual_hours_{hash(str(len(unusual_hour_transactions))) % 10000}",
+                pattern_type="unusual_hour_activity",
+                features={
+                    "suspicious_hours": [2, 3, 4, 5],
+                    "transaction_count": len(unusual_hour_transactions),
+                    "hour_distribution": dict(hour_distribution)
+                },
+                confidence=0.7,
+                support_count=len(unusual_hour_transactions),
+                accuracy_rate=0.0,
+                discovered_at=datetime.now(),
+                last_seen=datetime.now()
+            )
+            patterns.append(pattern)
+        
+        return patterns
+    
+    def _find_common_country_pairs(self, geographic_sequences: List[Dict[str, Any]]) -> List[Tuple[str, str]]:
+        """Find common country transition pairs."""
+        pairs = []
+        
+        for seq in geographic_sequences:
+            countries = seq["countries"]
+            for i in range(len(countries) - 1):
+                if countries[i] != countries[i + 1]:
+                    pair = tuple(sorted([countries[i], countries[i + 1]]))
+                    pairs.append(pair)
+        
+        pair_counts = Counter(pairs)
+        return pair_counts.most_common(3)
+
+
+class AnomalyDetector:
+    """Statistical anomaly detection for fraud patterns."""
+    
+    def __init__(self):
+        self.statistical_models: Dict[str, Dict[str, float]] = {}
+        self.anomaly_threshold = 2.5  # Standard deviations
+    
+    async def detect_statistical_anomalies(self, transaction: Dict[str, Any], historical_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Detect statistical anomalies in transaction."""
+        
+        anomalies = []
+        anomaly_scores = {}
+        
+        if not historical_data:
+            return {"anomalies": [], "scores": {}, "baseline_available": False}
+        
+        # Amount anomaly detection
+        amounts = [float(tx.get("amount", 0)) for tx in historical_data if tx.get("amount")]
         if amounts:
             mean_amount = np.mean(amounts)
             std_amount = np.std(amounts)
+            current_amount = float(transaction.get("amount", 0))
             
-            # Detect unusual amount patterns
-            if current_amount > mean_amount + 3 * std_amount:
-                patterns.append({
-                    "pattern_type": "unusual_high_amount",
-                    "description": f"Transaction amount ${current_amount:,.2f} is {(current_amount - mean_amount) / std_amount:.1f} std devs above normal",
-                    "risk_score": min(1.0, (current_amount - mean_amount) / (3 * std_amount)),
-                    "features": {
-                        "amount": current_amount,
-                        "historical_mean": mean_amount,
-                        "z_score": (current_amount - mean_amount) / std_amount
-                    }
-                })
-            
-            # Detect round number patterns
-            if current_amount > 1000 and current_amount % 100 == 0:
-                round_pattern_frequency = sum(1 for amt in amounts if amt % 100 == 0 and amt > 1000)
-                if round_pattern_frequency < len(amounts) * 0.1:  # Less than 10% are round
-                    patterns.append({
-                        "pattern_type": "suspicious_round_amount",
-                        "description": f"Large round amount ${current_amount:,.2f} is unusual for this user",
-                        "risk_score": 0.6,
-                        "features": {
-                            "amount": current_amount,
-                            "is_round": True,
-                            "round_frequency": round_pattern_frequency / len(amounts)
-                        }
-                    })
-        
-        return patterns
-    
-    async def _discover_temporal_patterns(self, transaction: Dict[str, Any], historical: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Discover time-based fraud patterns"""
-        patterns = []
-        
-        try:
-            current_time = datetime.fromisoformat(transaction.get("timestamp", "").replace("Z", "+00:00"))
-            current_hour = current_time.hour
-        except:
-            return patterns
-        
-        if not historical:
-            return patterns
-        
-        # Analyze historical time patterns
-        historical_hours = []
-        for tx in historical:
-            try:
-                tx_time = datetime.fromisoformat(tx.get("timestamp", "").replace("Z", "+00:00"))
-                historical_hours.append(tx_time.hour)
-            except:
-                continue
-        
-        if historical_hours:
-            hour_distribution = Counter(historical_hours)
-            typical_hours = [hour for hour, count in hour_distribution.items() if count > len(historical_hours) * 0.1]
-            
-            # Detect unusual time patterns
-            if current_hour not in typical_hours and (current_hour < 6 or current_hour > 22):
-                patterns.append({
-                    "pattern_type": "unusual_time",
-                    "description": f"Transaction at {current_hour}:00 is unusual for this user",
-                    "risk_score": 0.7,
-                    "features": {
-                        "transaction_hour": current_hour,
-                        "typical_hours": typical_hours,
-                        "is_night_time": current_hour < 6 or current_hour > 22
-                    }
-                })
-        
-        return patterns
-    
-    async def _discover_geographic_patterns(self, transaction: Dict[str, Any], historical: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Discover location-based fraud patterns"""
-        patterns = []
-        
-        current_location = transaction.get("location", {})
-        if not current_location:
-            return patterns
-        
-        current_country = current_location.get("country")
-        if not current_country:
-            return patterns
-        
-        # Analyze historical locations
-        historical_countries = [tx.get("location", {}).get("country") 
-                              for tx in historical if tx.get("location", {}).get("country")]
-        
-        if historical_countries:
-            country_distribution = Counter(historical_countries)
-            
-            # Detect new country pattern
-            if current_country not in country_distribution:
-                patterns.append({
-                    "pattern_type": "new_country",
-                    "description": f"First transaction from {current_country}",
-                    "risk_score": 0.8,
-                    "features": {
-                        "current_country": current_country,
-                        "historical_countries": list(country_distribution.keys())
-                    }
-                })
-            
-            # Detect high-risk country patterns
-            high_risk_countries = ["NG", "PK", "RU", "CN", "IR", "KP", "AF", "SY"]
-            if current_country in high_risk_countries:
-                patterns.append({
-                    "pattern_type": "high_risk_country",
-                    "description": f"Transaction from high-risk country: {current_country}",
-                    "risk_score": 0.9,
-                    "features": {
-                        "current_country": current_country,
-                        "risk_level": "high"
-                    }
-                })
-        
-        return patterns
-    
-    async def _discover_velocity_patterns(self, transaction: Dict[str, Any], historical: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Discover velocity-based fraud patterns"""
-        patterns = []
-        
-        try:
-            current_time = datetime.fromisoformat(transaction.get("timestamp", "").replace("Z", "+00:00"))
-        except:
-            return patterns
-        
-        # Count recent transactions
-        recent_1h = 0
-        recent_24h = 0
-        
-        for tx in historical:
-            try:
-                tx_time = datetime.fromisoformat(tx.get("timestamp", "").replace("Z", "+00:00"))
-                time_diff = (current_time - tx_time).total_seconds()
+            if std_amount > 0:
+                z_score = abs(current_amount - mean_amount) / std_amount
+                anomaly_scores["amount_z_score"] = z_score
                 
-                if time_diff <= 3600:  # 1 hour
-                    recent_1h += 1
-                if time_diff <= 86400:  # 24 hours
-                    recent_24h += 1
+                if z_score > self.anomaly_threshold:
+                    anomalies.append(f"Amount anomaly: ${current_amount:.2f} is {z_score:.1f} std devs from mean ${mean_amount:.2f}")
+        
+        # Velocity anomaly detection
+        velocities = [tx.get("velocity_24h", 0) for tx in historical_data]
+        current_velocity = transaction.get("velocity_24h", 0)
+        
+        if velocities and current_velocity:
+            mean_velocity = np.mean(velocities)
+            std_velocity = np.std(velocities)
+            
+            if std_velocity > 0:
+                velocity_z_score = abs(current_velocity - mean_velocity) / std_velocity
+                anomaly_scores["velocity_z_score"] = velocity_z_score
+                
+                if velocity_z_score > self.anomaly_threshold:
+                    anomalies.append(f"Velocity anomaly: {current_velocity} transactions is {velocity_z_score:.1f} std devs from mean {mean_velocity:.1f}")
+        
+        # Time-of-day anomaly
+        hours = []
+        for tx in historical_data:
+            try:
+                hour = datetime.fromisoformat(tx["timestamp"]).hour
+                hours.append(hour)
             except:
                 continue
         
-        # Detect high velocity patterns
-        if recent_1h > 5:
-            patterns.append({
-                "pattern_type": "high_velocity_1h",
-                "description": f"{recent_1h} transactions in the last hour",
-                "risk_score": min(1.0, recent_1h / 10),
-                "features": {
-                    "transactions_1h": recent_1h,
-                    "velocity_score": recent_1h / 10
-                }
-            })
-        
-        if recent_24h > 20:
-            patterns.append({
-                "pattern_type": "high_velocity_24h",
-                "description": f"{recent_24h} transactions in the last 24 hours",
-                "risk_score": min(1.0, recent_24h / 50),
-                "features": {
-                    "transactions_24h": recent_24h,
-                    "daily_velocity": recent_24h
-                }
-            })
-        
-        return patterns
-    
-    async def _recognize_patterns(self, transaction_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Recognize existing patterns in transaction data"""
-        recognized = []
-        
-        # Extract transaction features
-        amount = transaction_data.get("amount", 0)
-        merchant_category = transaction_data.get("merchant_category", "")
-        country = transaction_data.get("location", {}).get("country", "")
-        timestamp = transaction_data.get("timestamp", "")
-        
-        # Parse hour if timestamp available
-        hour = None
-        if timestamp:
+        if hours:
             try:
-                tx_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                hour = tx_time.hour
+                current_hour = datetime.fromisoformat(transaction["timestamp"]).hour
+                hour_counts = Counter(hours)
+                total_hours = len(hours)
+                current_hour_frequency = hour_counts.get(current_hour, 0) / total_hours
+                
+                anomaly_scores["hour_frequency"] = current_hour_frequency
+                
+                if current_hour_frequency < 0.05:  # Less than 5% of historical transactions
+                    anomalies.append(f"Unusual time: Hour {current_hour} represents only {current_hour_frequency:.1%} of historical activity")
             except:
                 pass
         
-        # Check each known pattern for explicit matches
-        for pattern_id, pattern in self.known_patterns.items():
-            match_strength = 0.0
-            matched_features = []
-            
-            features = pattern.get("features", {})
-            
-            # Check merchant category match
-            if "merchant_category" in features and features["merchant_category"] == merchant_category:
-                match_strength += 0.4
-                matched_features.append("merchant_category")
-            
-            # Check amount threshold
-            if "amount_threshold" in features and amount >= features["amount_threshold"]:
-                match_strength += 0.3
-                matched_features.append("amount_threshold")
-            
-            # Check high-risk countries
-            if "high_risk_countries" in features and country in features["high_risk_countries"]:
-                match_strength += 0.4
-                matched_features.append("high_risk_country")
-            
-            # Check night hours
-            if "night_hours" in features and hour is not None and hour in features["night_hours"]:
-                match_strength += 0.3
-                matched_features.append("night_hours")
-            
-            # If we have a significant match, add it
-            if match_strength >= 0.3:  # Lower threshold for matching
-                recognized.append({
-                    "pattern_id": pattern_id,
-                    "pattern_type": pattern.get("pattern_type", "unknown"),
-                    "similarity_score": match_strength,
-                    "confidence": pattern.get("confidence", 0.5),
-                    "risk_score": pattern.get("risk_score", 0.5),
-                    "description": pattern.get("description", ""),
-                    "match_strength": match_strength * pattern.get("confidence", 0.5),
-                    "matched_features": matched_features
-                })
-        
-        # Also do vector similarity search as backup
-        transaction_text = self._transaction_to_text(transaction_data)
-        similar_patterns = self.vector_db.search_similar_patterns(transaction_text, top_k=3, threshold=0.6)
-        
-        for pattern_id, similarity, pattern_data in similar_patterns:
-            # Avoid duplicates
-            if not any(p["pattern_id"] == pattern_id for p in recognized):
-                recognized.append({
-                    "pattern_id": pattern_id,
-                    "pattern_type": pattern_data.get("pattern_type", "unknown"),
-                    "similarity_score": similarity,
-                    "confidence": pattern_data.get("confidence", 0.5),
-                    "risk_score": pattern_data.get("risk_score", 0.5),
-                    "description": pattern_data.get("description", ""),
-                    "match_strength": similarity * pattern_data.get("confidence", 0.5),
-                    "matched_features": ["vector_similarity"]
-                })
-        
-        return recognized
-    
-    async def _analyze_pattern_evolution(self) -> Dict[str, Any]:
-        """Analyze how patterns are evolving over time"""
-        evolution_stats = {
-            "total_patterns": len(self.known_patterns),
-            "new_patterns_last_24h": 0,
-            "evolving_patterns": [],
-            "stable_patterns": 0
-        }
-        
-        current_time = datetime.utcnow()
-        
-        for pattern_id, pattern in self.known_patterns.items():
-            try:
-                created_time = datetime.fromisoformat(pattern.get("discovered_at", ""))
-                age_hours = (current_time - created_time).total_seconds() / 3600
-                
-                if age_hours <= 24:
-                    evolution_stats["new_patterns_last_24h"] += 1
-                
-                # Check if pattern is evolving (confidence changing)
-                if pattern_id in self.pattern_evolution_tracker:
-                    confidence_history = [entry.get("confidence", 0.5) 
-                                        for entry in self.pattern_evolution_tracker[pattern_id]]
-                    if len(confidence_history) > 1:
-                        confidence_trend = confidence_history[-1] - confidence_history[0]
-                        if abs(confidence_trend) > 0.1:
-                            evolution_stats["evolving_patterns"].append({
-                                "pattern_id": pattern_id,
-                                "trend": "increasing" if confidence_trend > 0 else "decreasing",
-                                "confidence_change": confidence_trend
-                            })
-                        else:
-                            evolution_stats["stable_patterns"] += 1
-                
-            except:
-                continue
-        
-        return evolution_stats
-    
-    async def _calculate_pattern_risk(self, recognized_patterns: List[Dict[str, Any]], 
-                                    new_patterns: List[Dict[str, Any]]) -> float:
-        """Calculate overall risk score based on pattern analysis"""
-        if not recognized_patterns and not new_patterns:
-            return 0.0
-        
-        # Weight recognized patterns by their match strength
-        recognized_risk = 0.0
-        for pattern in recognized_patterns:
-            risk_contribution = pattern.get("risk_score", 0.5) * pattern.get("match_strength", 0.5)
-            recognized_risk += risk_contribution
-        
-        # Weight new patterns by their initial risk scores
-        new_pattern_risk = sum(pattern.get("risk_score", 0.5) for pattern in new_patterns)
-        
-        # Combine risks (recognized patterns weighted more heavily)
-        total_risk = (0.7 * recognized_risk + 0.3 * new_pattern_risk)
-        
-        return min(1.0, total_risk)
-    
-    async def _generate_pattern_insights(self, new_patterns: List[Dict[str, Any]], 
-                                       recognized_patterns: List[Dict[str, Any]]) -> List[str]:
-        """Generate actionable insights from pattern analysis"""
-        insights = []
-        
-        if new_patterns:
-            insights.append(f"Discovered {len(new_patterns)} new suspicious patterns")
-            
-            # Highlight most concerning new patterns
-            high_risk_new = [p for p in new_patterns if p.get("risk_score", 0) > 0.7]
-            if high_risk_new:
-                insights.append(f"{len(high_risk_new)} new patterns show high fraud risk")
-        
-        if recognized_patterns:
-            insights.append(f"Matched {len(recognized_patterns)} known fraud patterns")
-            
-            # Highlight strongest matches
-            strong_matches = [p for p in recognized_patterns if p.get("match_strength", 0) > 0.8]
-            if strong_matches:
-                insights.append(f"{len(strong_matches)} patterns show strong similarity to known fraud")
-        
-        # Pattern frequency insights
-        if len(self.known_patterns) > 100:
-            insights.append("Large pattern database enables sophisticated fraud detection")
-        
-        return insights
-    
-    def _pattern_to_text(self, pattern: Dict[str, Any]) -> str:
-        """Convert pattern to text representation for vector database"""
-        pattern_type = pattern.get("pattern_type", "unknown")
-        description = pattern.get("description", "")
-        features = pattern.get("features", {})
-        
-        text_parts = [
-            f"Pattern type: {pattern_type}",
-            f"Description: {description}"
-        ]
-        
-        # Add feature descriptions
-        for key, value in features.items():
-            text_parts.append(f"{key}: {value}")
-        
-        return " | ".join(text_parts)
-    
-    def _transaction_to_text(self, transaction: Dict[str, Any]) -> str:
-        """Convert transaction to text representation for pattern matching"""
-        amount = transaction.get("amount", 0)
-        timestamp = transaction.get("timestamp", "")
-        merchant_category = transaction.get("merchant_category", "unknown")
-        location = transaction.get("location", {})
-        
-        hour = "unknown"
-        try:
-            hour = datetime.fromisoformat(timestamp.replace("Z", "+00:00")).hour
-        except:
-            pass
-        
-        text_parts = [
-            f"Amount: ${amount:,.2f}",
-            f"Hour: {hour}",
-            f"Merchant category: {merchant_category}",
-            f"Country: {location.get('country', 'unknown')}"
-        ]
-        
-        return " | ".join(text_parts)
-    
-    async def get_pattern_summary(self) -> Dict[str, Any]:
-        """Get summary of current pattern knowledge"""
-        pattern_types = defaultdict(int)
-        high_confidence_patterns = 0
-        
-        for pattern in self.known_patterns.values():
-            pattern_types[pattern.get("pattern_type", "unknown")] += 1
-            if pattern.get("confidence", 0) > 0.8:
-                high_confidence_patterns += 1
-        
         return {
-            "total_patterns": len(self.known_patterns),
-            "pattern_types": dict(pattern_types),
-            "high_confidence_patterns": high_confidence_patterns,
-            "vector_db_stats": self.vector_db.get_stats(),
-            "suspicious_patterns": len(self.suspicious_patterns)
+            "anomalies": anomalies,
+            "scores": anomaly_scores,
+            "anomaly_count": len(anomalies),
+            "max_z_score": max(anomaly_scores.values()) if anomaly_scores else 0,
+            "baseline_available": True
         }
+
+
+class PatternRecognitionAgent(BaseFraudDetectionAgent):
+    """Specialized agent for discovering and recognizing fraud patterns."""
     
-    def _initialize_base_patterns(self):
-        """Initialize the agent with basic fraud patterns"""
-        base_patterns = [
-            {
-                "pattern_id": "high_amount_crypto",
-                "pattern_type": "amount_merchant",
-                "description": "High amount cryptocurrency transactions",
-                "risk_score": 0.8,
-                "confidence": 0.9,
-                "features": {
-                    "merchant_category": "cryptocurrency",
-                    "amount_threshold": 2000,
-                    "risk_factors": ["high_amount", "crypto"]
-                }
-            },
-            {
-                "pattern_id": "night_high_risk_country",
-                "pattern_type": "temporal_geographic",
-                "description": "Night transactions from high-risk countries",
-                "risk_score": 0.9,
-                "confidence": 0.85,
-                "features": {
-                    "high_risk_countries": ["NG", "PK", "RU"],
-                    "night_hours": [22, 23, 0, 1, 2, 3, 4, 5],
-                    "risk_factors": ["night_time", "high_risk_location"]
-                }
-            },
-            {
-                "pattern_id": "gambling_large_amount",
-                "pattern_type": "merchant_amount",
-                "description": "Large gambling transactions",
-                "risk_score": 0.7,
-                "confidence": 0.8,
-                "features": {
-                    "merchant_category": "gambling",
-                    "amount_threshold": 1000,
-                    "risk_factors": ["gambling", "high_amount"]
-                }
-            },
-            {
-                "pattern_id": "money_transfer_suspicious",
-                "pattern_type": "merchant_geographic",
-                "description": "Money transfers to high-risk countries",
-                "risk_score": 0.8,
-                "confidence": 0.9,
-                "features": {
-                    "merchant_category": "money_transfer",
-                    "high_risk_countries": ["NG", "PK", "AF"],
-                    "risk_factors": ["money_transfer", "high_risk_destination"]
-                }
-            }
-        ]
+    def __init__(self, agent_id: str, mcp_client: MCPClient):
+        super().__init__(agent_id, mcp_client, "pattern_recognition")
         
-        for pattern in base_patterns:
-            pattern_id = pattern["pattern_id"]
-            self.known_patterns[pattern_id] = pattern
+        # Specialized components
+        self.pattern_miner = PatternMiner()
+        self.anomaly_detector = AnomalyDetector()
+        
+        # Pattern library
+        self.discovered_patterns: Dict[str, FraudPattern] = {}
+        self.pattern_matches: Dict[str, List[str]] = defaultdict(list)  # transaction_id -> pattern_ids
+        
+        # Historical data for analysis
+        self.transaction_history: List[Dict[str, Any]] = []
+        self.max_history_size = 10000
+    
+    async def _load_specialized_knowledge(self):
+        """Load pattern recognition specific knowledge."""
+        
+        # Load known fraud patterns
+        known_patterns = {
+            "card_testing": {
+                "description": "Small amounts to test card validity",
+                "features": {
+                    "amount_range": (1, 10),
+                    "velocity_pattern": "rapid_sequential",
+                    "success_rate": "mixed"
+                },
+                "confidence": 0.8
+            },
+            "account_takeover": {
+                "description": "Sudden change in transaction patterns",
+                "features": {
+                    "geographic_change": True,
+                    "amount_escalation": True,
+                    "device_change": True
+                },
+                "confidence": 0.9
+            },
+            "synthetic_identity": {
+                "description": "Artificially created identity patterns",
+                "features": {
+                    "new_account": True,
+                    "perfect_payment_history": True,
+                    "sudden_large_transactions": True
+                },
+                "confidence": 0.85
+            }
+        }
+        
+        for pattern_name, pattern_data in known_patterns.items():
+            self.knowledge_base.add_pattern(pattern_name, pattern_data)
+        
+        logger.info(f"Pattern Recognition Agent {self.agent_id} loaded {len(known_patterns)} known patterns")
+    
+    async def analyze_transaction(self, transaction: Dict[str, Any]) -> Dict[str, Any]:
+        """Perform pattern recognition analysis on transaction."""
+        
+        start_time = datetime.now()
+        transaction_id = transaction.get("transaction_id", "unknown")
+        
+        # Add transaction to history
+        self.transaction_history.append(transaction)
+        if len(self.transaction_history) > self.max_history_size:
+            self.transaction_history = self.transaction_history[-self.max_history_size:]
+        
+        try:
+            # Step 1: Match against known patterns
+            pattern_matches = await self._match_known_patterns(transaction)
             
-            # Add to vector database
-            pattern_text = self._pattern_to_text(pattern)
-            self.vector_db.add_pattern(pattern_id, pattern_text, pattern)
+            # Step 2: Detect statistical anomalies
+            anomaly_results = await self.anomaly_detector.detect_statistical_anomalies(
+                transaction, self.transaction_history[-1000:]  # Last 1000 transactions
+            )
+            
+            # Step 3: Mine new patterns periodically
+            if len(self.transaction_history) % 100 == 0:  # Every 100 transactions
+                await self._discover_new_patterns()
+            
+            # Step 4: Calculate overall pattern-based risk score
+            risk_score = self._calculate_pattern_risk_score(pattern_matches, anomaly_results)
+            
+            # Step 5: Determine confidence
+            confidence = self._calculate_pattern_confidence(pattern_matches, anomaly_results)
+            
+            # Step 6: Generate risk factors and insights
+            risk_factors = self._generate_risk_factors(pattern_matches, anomaly_results)
+            protective_factors = self._generate_protective_factors(pattern_matches, anomaly_results)
+            
+            processing_time = (datetime.now() - start_time).total_seconds() * 1000
+            
+            analysis_results = {
+                "agent_type": "pattern_recognition",
+                "risk_score": risk_score,
+                "confidence": confidence,
+                "risk_factors": risk_factors,
+                "protective_factors": protective_factors,
+                "pattern_matches": pattern_matches,
+                "anomaly_detection": anomaly_results,
+                "processing_time_ms": processing_time,
+                "patterns_in_library": len(self.discovered_patterns),
+                "transaction_history_size": len(self.transaction_history)
+            }
+            
+            # Store pattern matches for this transaction
+            matched_pattern_ids = [match["pattern_id"] for match in pattern_matches]
+            self.pattern_matches[transaction_id] = matched_pattern_ids
+            
+            logger.debug(
+                f"Pattern analysis completed for {transaction_id}: "
+                f"risk={risk_score:.3f}, patterns_matched={len(pattern_matches)}, "
+                f"anomalies={anomaly_results['anomaly_count']}"
+            )
+            
+            return analysis_results
+            
+        except Exception as e:
+            logger.error(f"Pattern recognition analysis error: {e}")
+            return {
+                "agent_type": "pattern_recognition",
+                "risk_score": 0.5,
+                "confidence": 0.1,
+                "risk_factors": [f"Pattern analysis error: {str(e)}"],
+                "protective_factors": [],
+                "error": str(e)
+            }
+    
+    async def _match_known_patterns(self, transaction: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Match transaction against known fraud patterns."""
+        
+        matches = []
+        
+        # Get relevant patterns from knowledge base
+        relevant_patterns = self.knowledge_base.get_relevant_patterns(transaction)
+        
+        for pattern_name, pattern_info in relevant_patterns:
+            pattern_data = pattern_info["data"]
+            relevance = pattern_info["relevance"]
+            accuracy = pattern_info["accuracy_rate"]
+            
+            # Calculate match strength
+            match_strength = self._calculate_match_strength(transaction, pattern_data)
+            
+            if match_strength > 0.3:  # Minimum match threshold
+                matches.append({
+                    "pattern_id": pattern_name,
+                    "pattern_type": pattern_data.get("description", "Unknown"),
+                    "match_strength": match_strength,
+                    "relevance": relevance,
+                    "accuracy": accuracy,
+                    "confidence": pattern_info["confidence"],
+                    "evidence": self._extract_pattern_evidence(transaction, pattern_data)
+                })
+        
+        # Sort by match strength
+        matches.sort(key=lambda x: x["match_strength"] * x["confidence"], reverse=True)
+        
+        return matches
+    
+    def _calculate_match_strength(self, transaction: Dict[str, Any], pattern: Dict[str, Any]) -> float:
+        """Calculate how strongly a transaction matches a pattern."""
+        
+        match_factors = []
+        
+        # Amount-based matching
+        if "amount_range" in pattern:
+            amount = float(transaction.get("amount", 0))
+            min_amount, max_amount = pattern["amount_range"]
+            if min_amount <= amount <= max_amount:
+                match_factors.append(1.0)
+            else:
+                # Partial match based on distance
+                center = (min_amount + max_amount) / 2
+                range_size = max_amount - min_amount
+                distance = abs(amount - center)
+                normalized_distance = distance / max(range_size, 1)
+                match_factors.append(max(0, 1 - normalized_distance))
+        
+        # Velocity pattern matching
+        if "velocity_pattern" in pattern:
+            velocity_1h = transaction.get("velocity_1h", 0)
+            velocity_24h = transaction.get("velocity_24h", 0)
+            
+            if pattern["velocity_pattern"] == "rapid_sequential":
+                if velocity_1h > 5 or velocity_24h > 20:
+                    match_factors.append(0.9)
+                else:
+                    match_factors.append(0.3)
+        
+        # Geographic matching
+        if "geographic_change" in pattern and pattern["geographic_change"]:
+            # This would require historical data - simplified here
+            if transaction.get("is_new_location", False):
+                match_factors.append(0.8)
+            else:
+                match_factors.append(0.2)
+        
+        # Device change matching
+        if "device_change" in pattern and pattern["device_change"]:
+            if "new/unknown device" in transaction.get("risk_factors", []):
+                match_factors.append(0.8)
+            else:
+                match_factors.append(0.2)
+        
+        # Account age matching
+        if "new_account" in pattern and pattern["new_account"]:
+            account_age_days = transaction.get("account_age_days", 365)
+            if account_age_days < 30:
+                match_factors.append(0.9)
+            elif account_age_days < 90:
+                match_factors.append(0.5)
+            else:
+                match_factors.append(0.1)
+        
+        return np.mean(match_factors) if match_factors else 0.0
+    
+    def _extract_pattern_evidence(self, transaction: Dict[str, Any], pattern: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract evidence of pattern matching."""
+        
+        evidence = {}
+        
+        if "amount_range" in pattern:
+            amount = float(transaction.get("amount", 0))
+            evidence["amount"] = {
+                "transaction_amount": amount,
+                "pattern_range": pattern["amount_range"],
+                "within_range": pattern["amount_range"][0] <= amount <= pattern["amount_range"][1]
+            }
+        
+        if "velocity_pattern" in pattern:
+            evidence["velocity"] = {
+                "velocity_1h": transaction.get("velocity_1h", 0),
+                "velocity_24h": transaction.get("velocity_24h", 0),
+                "pattern_type": pattern["velocity_pattern"]
+            }
+        
+        return evidence
+    
+    async def _discover_new_patterns(self):
+        """Periodically mine for new fraud patterns."""
+        
+        try:
+            if len(self.transaction_history) < 50:  # Need minimum data
+                return
+            
+            # Mine patterns from recent transaction history
+            new_patterns = await self.pattern_miner.mine_sequential_patterns(
+                self.transaction_history[-500:]  # Last 500 transactions
+            )
+            
+            # Add discovered patterns to library
+            for pattern in new_patterns:
+                if pattern.pattern_id not in self.discovered_patterns:
+                    self.discovered_patterns[pattern.pattern_id] = pattern
+                    
+                    # Also add to knowledge base
+                    pattern_data = {
+                        "description": f"Auto-discovered {pattern.pattern_type}",
+                        "features": pattern.features,
+                        "confidence": pattern.confidence,
+                        "support_count": pattern.support_count
+                    }
+                    self.knowledge_base.add_pattern(pattern.pattern_id, pattern_data)
+                    
+                    logger.info(f"Discovered new pattern: {pattern.pattern_id} ({pattern.pattern_type})")
+            
+            # Update performance metrics
+            self.performance_metrics["patterns_learned"] = len(self.discovered_patterns)
+            
+        except Exception as e:
+            logger.error(f"Pattern discovery error: {e}")
+    
+    def _calculate_pattern_risk_score(self, pattern_matches: List[Dict[str, Any]], anomaly_results: Dict[str, Any]) -> float:
+        """Calculate overall risk score based on pattern matches and anomalies."""
+        
+        risk_components = []
+        
+        # Pattern match component
+        if pattern_matches:
+            # Weight by match strength and pattern confidence
+            pattern_scores = [
+                match["match_strength"] * match["confidence"] 
+                for match in pattern_matches
+            ]
+            pattern_risk = min(1.0, max(pattern_scores))  # Take highest match
+            risk_components.append(pattern_risk)
+        else:
+            risk_components.append(0.2)  # Base risk when no patterns match
+        
+        # Anomaly detection component
+        anomaly_count = anomaly_results.get("anomaly_count", 0)
+        max_z_score = anomaly_results.get("max_z_score", 0)
+        
+        if anomaly_count > 0:
+            # Scale z-score to 0-1 range
+            anomaly_risk = min(1.0, max_z_score / 5.0)  # z-score of 5 = max risk
+            risk_components.append(anomaly_risk)
+        else:
+            risk_components.append(0.1)  # Low risk when no anomalies
+        
+        # Combine components with weights
+        pattern_weight = 0.7
+        anomaly_weight = 0.3
+        
+        if len(risk_components) >= 2:
+            final_risk = (pattern_weight * risk_components[0] + 
+                         anomaly_weight * risk_components[1])
+        else:
+            final_risk = np.mean(risk_components)
+        
+        return min(1.0, max(0.0, final_risk))
+    
+    def _calculate_pattern_confidence(self, pattern_matches: List[Dict[str, Any]], anomaly_results: Dict[str, Any]) -> float:
+        """Calculate confidence in pattern recognition analysis."""
+        
+        confidence_factors = []
+        
+        # Pattern matching confidence
+        if pattern_matches:
+            # Higher confidence with stronger matches and proven patterns
+            match_confidences = [
+                match["match_strength"] * match.get("accuracy", 0.5)
+                for match in pattern_matches
+            ]
+            pattern_confidence = max(match_confidences) if match_confidences else 0.5
+            confidence_factors.append(pattern_confidence)
+        else:
+            confidence_factors.append(0.3)  # Lower confidence with no pattern matches
+        
+        # Anomaly detection confidence
+        baseline_available = anomaly_results.get("baseline_available", False)
+        if baseline_available:
+            # Confidence based on amount of historical data
+            history_size = len(self.transaction_history)
+            history_confidence = min(1.0, history_size / 1000)  # Full confidence at 1000+ transactions
+            confidence_factors.append(history_confidence)
+        else:
+            confidence_factors.append(0.2)  # Low confidence without baseline
+        
+        return np.mean(confidence_factors)
+    
+    def _generate_risk_factors(self, pattern_matches: List[Dict[str, Any]], anomaly_results: Dict[str, Any]) -> List[str]:
+        """Generate risk factors based on pattern analysis."""
+        
+        risk_factors = []
+        
+        # Pattern-based risk factors
+        for match in pattern_matches[:3]:  # Top 3 matches
+            risk_factors.append(
+                f"Matches {match['pattern_type']} pattern (strength: {match['match_strength']:.2f})"
+            )
+        
+        # Anomaly-based risk factors
+        anomalies = anomaly_results.get("anomalies", [])
+        risk_factors.extend(anomalies[:2])  # Top 2 anomalies
+        
+        return risk_factors
+    
+    def _generate_protective_factors(self, pattern_matches: List[Dict[str, Any]], anomaly_results: Dict[str, Any]) -> List[str]:
+        """Generate protective factors based on pattern analysis."""
+        
+        protective_factors = []
+        
+        # No strong pattern matches is protective
+        if not pattern_matches or max(match["match_strength"] for match in pattern_matches) < 0.5:
+            protective_factors.append("No strong fraud pattern matches detected")
+        
+        # No anomalies is protective
+        if anomaly_results.get("anomaly_count", 0) == 0:
+            protective_factors.append("Transaction follows normal statistical patterns")
+        
+        # Historical consistency
+        if len(self.transaction_history) > 100:
+            protective_factors.append("Sufficient transaction history available for analysis")
+        
+        return protective_factors

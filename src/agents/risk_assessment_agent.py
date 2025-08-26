@@ -1,662 +1,622 @@
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
 import numpy as np
-import json
-from scipy import stats
+from datetime import datetime, timedelta
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
+import math
 
-from .base_agent import BaseAgent
+from .base_agent import BaseFraudDetectionAgent
+from core.mcp_client import MCPClient
 
 logger = logging.getLogger(__name__)
 
-class RiskAssessmentAgent(BaseAgent):
-    """Agent specialized in comprehensive risk assessment with reasoning chains"""
+
+@dataclass
+class RiskFactor:
+    factor_name: str
+    weight: float
+    value: float
+    contribution: float
+    description: str
+
+
+class ProbabilisticRiskModel:
+    """Probabilistic risk assessment using Bayesian inference."""
     
-    def __init__(self, agent_id: str = "risk_assessment_001"):
-        super().__init__(agent_id, "risk_assessment")
-        self.risk_factors: Dict[str, Dict[str, Any]] = {}
-        self.risk_models: Dict[str, Any] = {}
-        self.confidence_intervals: Dict[str, Tuple[float, float]] = {}
-        self.reasoning_chains: List[Dict[str, Any]] = []
-        self._initialize_risk_models()
-        
-    def _initialize_risk_models(self):
-        """Initialize risk assessment models"""
-        self.risk_models = {
-            "amount_risk": {
-                "thresholds": {"low": 50, "medium": 500, "high": 2000, "critical": 5000},
-                "weights": {"low": 0.1, "medium": 0.4, "high": 0.7, "critical": 0.9}
-            },
-            "velocity_risk": {
-                "thresholds": {"tx_1h": 3, "tx_24h": 10, "amount_1h": 2000},
-                "weights": {"tx_1h": 0.4, "tx_24h": 0.3, "amount_1h": 0.3}
-            },
-            "geographic_risk": {
-                "high_risk_countries": ["NG", "PK", "RU", "CN", "IR", "KP", "AF", "SY"],
-                "medium_risk_countries": ["IN", "BR", "MX", "TR", "EG", "ID"],
-                "risk_scores": {"unknown": 0.6, "domestic": 0.1, "medium_risk": 0.5, "high_risk": 0.8}
-            },
-            "temporal_risk": {
-                "high_risk_hours": list(range(0, 6)) + list(range(22, 24)),
-                "weekend_multiplier": 1.3
-            },
-            "merchant_risk": {
-                "high_risk_categories": ["cryptocurrency", "gambling", "money_transfer", "adult", "cash_advance"],
-                "medium_risk_categories": ["online", "travel", "electronics"],
-                "risk_scores": {"high_risk": 0.7, "medium_risk": 0.4, "low_risk": 0.1}
-            }
+    def __init__(self):
+        self.prior_fraud_rate = 0.02  # 2% base fraud rate
+        self.risk_factors = {
+            "high_amount": {"sensitivity": 0.8, "specificity": 0.7},
+            "new_device": {"sensitivity": 0.6, "specificity": 0.8},
+            "unusual_location": {"sensitivity": 0.7, "specificity": 0.75},
+            "high_velocity": {"sensitivity": 0.9, "specificity": 0.6},
+            "new_account": {"sensitivity": 0.5, "specificity": 0.9}
         }
     
-    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Perform comprehensive risk assessment with reasoning chains"""
-        start_time = datetime.utcnow()
+    def calculate_posterior_probability(self, evidence: Dict[str, bool]) -> Dict[str, float]:
+        """Calculate posterior fraud probability given evidence."""
         
-        try:
-            transaction_data = input_data.get("transaction", {})
-            context_data = input_data.get("context", {})
-            user_profile = input_data.get("user_profile", {})
-            
-            # Build reasoning chain
-            reasoning_chain = []
-            
-            # Assess individual risk components
-            amount_risk = await self._assess_amount_risk(transaction_data, reasoning_chain)
-            velocity_risk = await self._assess_velocity_risk(context_data, reasoning_chain)
-            geographic_risk = await self._assess_geographic_risk(transaction_data, reasoning_chain)
-            temporal_risk = await self._assess_temporal_risk(transaction_data, reasoning_chain)
-            merchant_risk = await self._assess_merchant_risk(transaction_data, reasoning_chain)
-            behavioral_risk = await self._assess_behavioral_risk(transaction_data, user_profile, reasoning_chain)
-            
-            # Calculate composite risk score
-            composite_risk = await self._calculate_composite_risk({
-                "amount": amount_risk,
-                "velocity": velocity_risk,
-                "geographic": geographic_risk,
-                "temporal": temporal_risk,
-                "merchant": merchant_risk,
-                "behavioral": behavioral_risk
-            }, reasoning_chain)
-            
-            # Calculate confidence intervals
-            confidence_interval = await self._calculate_confidence_interval(
-                composite_risk, transaction_data, context_data
-            )
-            
-            # Generate risk explanation
-            risk_explanation = await self._generate_risk_explanation(reasoning_chain)
-            
-            # Determine risk level
-            risk_level = self._determine_risk_level(composite_risk["final_score"])
-            
-            # Generate recommendations
-            recommendations = await self._generate_recommendations(
-                composite_risk, risk_level, reasoning_chain
-            )
-            
-            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
-            confidence = self._calculate_confidence({
-                "data_quality": len([x for x in [transaction_data, context_data, user_profile] if x]) / 3,
-                "pattern_match": min(1.0, len(reasoning_chain) / 5),
-                "historical_accuracy": self.performance_metrics["correct_decisions"] / max(1, self.performance_metrics["total_decisions"])
-            })
-            
-            result = {
-                "agent_id": self.agent_id,
-                "composite_risk_score": composite_risk["final_score"],
-                "risk_level": risk_level,
-                "risk_components": {
-                    "amount_risk": amount_risk,
-                    "velocity_risk": velocity_risk,
-                    "geographic_risk": geographic_risk,
-                    "temporal_risk": temporal_risk,
-                    "merchant_risk": merchant_risk,
-                    "behavioral_risk": behavioral_risk
-                },
-                "confidence_interval": confidence_interval,
-                "reasoning_chain": reasoning_chain,
-                "risk_explanation": risk_explanation,
-                "recommendations": recommendations,
-                "confidence": confidence,
-                "processing_time_ms": processing_time
-            }
-            
-            # Store reasoning chain for learning
-            self.reasoning_chains.append({
-                "timestamp": start_time.isoformat(),
-                "reasoning_chain": reasoning_chain,
-                "final_score": composite_risk["final_score"],
-                "confidence": confidence
-            })
-            
-            await self.record_decision(input_data, result, processing_time, confidence)
-            return result
-            
-        except Exception as e:
-            logger.error(f"Risk assessment processing failed: {str(e)}")
-            return {
-                "agent_id": self.agent_id,
-                "error": str(e),
-                "confidence": 0.0
-            }
-    
-    async def learn(self, feedback: Dict[str, Any]) -> None:
-        """Learn from feedback to improve risk assessment accuracy"""
-        try:
-            transaction_id = feedback.get("transaction_id")
-            actual_fraud = feedback.get("actual_fraud", False)
-            predicted_risk = feedback.get("predicted_risk", 0.5)
-            
-            # Calculate prediction error
-            error = abs((1.0 if actual_fraud else 0.0) - predicted_risk)
-            
-            # Update risk factor weights based on feedback
-            risk_components = feedback.get("risk_components", {})
-            
-            for component, risk_data in risk_components.items():
-                if component in self.risk_factors:
-                    # Adjust component weight based on accuracy
-                    current_weight = self.risk_factors[component].get("weight", 1.0)
-                    
-                    if error < 0.2:  # Good prediction
-                        new_weight = min(2.0, current_weight * 1.05)
-                    else:  # Poor prediction
-                        new_weight = max(0.5, current_weight * 0.95)
-                    
-                    self.risk_factors[component]["weight"] = new_weight
-                    self.risk_factors[component]["last_updated"] = datetime.utcnow().isoformat()
-            
-            # Update confidence interval models
-            await self._update_confidence_models(feedback)
-            
-            logger.info(f"Risk assessment learning updated for transaction {transaction_id}")
-            
-        except Exception as e:
-            logger.error(f"Risk assessment learning failed: {str(e)}")
-    
-    async def get_reasoning(self, input_data: Dict[str, Any]) -> str:
-        """Get human-readable reasoning for risk assessment"""
-        transaction = input_data.get("transaction", {})
+        # Start with prior
+        fraud_prob = self.prior_fraud_rate
+        legitimate_prob = 1 - self.prior_fraud_rate
         
-        reasoning_prompt = f"""
-        Provide a clear explanation of the risk assessment for this transaction:
+        # Apply Bayes theorem for each piece of evidence
+        for factor_name, is_present in evidence.items():
+            if factor_name in self.risk_factors:
+                factor = self.risk_factors[factor_name]
+                
+                if is_present:
+                    # P(Evidence|Fraud) = sensitivity
+                    # P(Evidence|Legitimate) = 1 - specificity
+                    likelihood_fraud = factor["sensitivity"]
+                    likelihood_legit = 1 - factor["specificity"]
+                else:
+                    # P(Not Evidence|Fraud) = 1 - sensitivity
+                    # P(Not Evidence|Legitimate) = specificity
+                    likelihood_fraud = 1 - factor["sensitivity"]
+                    likelihood_legit = factor["specificity"]
+                
+                # Update probabilities
+                fraud_prob *= likelihood_fraud
+                legitimate_prob *= likelihood_legit
         
-        Transaction Details:
-        - Amount: ${transaction.get('amount', 0):,.2f}
-        - Time: {transaction.get('timestamp', 'unknown')}
-        - Merchant: {transaction.get('merchant_category', 'unknown')}
-        - Location: {transaction.get('location', {}).get('country', 'unknown')}
-        
-        Consider the following risk factors:
-        1. Transaction amount relative to user's typical spending
-        2. Time of transaction and user's typical activity patterns
-        3. Geographic location and travel patterns
-        4. Transaction velocity and frequency
-        5. Merchant category and risk level
-        
-        Explain step-by-step how each factor contributes to the overall risk assessment.
-        """
-        
-        ai_reasoning = await self._generate_ai_response(reasoning_prompt, max_tokens=400)
-        
-        if ai_reasoning:
-            return ai_reasoning
-        
-        # Fallback reasoning
-        return f"Risk assessment analyzed multiple factors including amount, timing, location, and user behavior patterns to determine fraud probability."
-    
-    async def _assess_amount_risk(self, transaction_data: Dict[str, Any], reasoning_chain: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Assess risk based on transaction amount"""
-        amount = transaction_data.get("amount", 0)
-        model = self.risk_models["amount_risk"]
-        
-        # Determine amount risk level
-        risk_level = "low"
-        risk_score = 0.1
-        
-        for level, threshold in model["thresholds"].items():
-            if amount >= threshold:
-                risk_level = level
-                risk_score = model["weights"][level]
-        
-        reasoning_step = {
-            "factor": "amount_risk",
-            "reasoning": f"Transaction amount ${amount:,.2f} classified as {risk_level} risk",
-            "risk_score": risk_score,
-            "evidence": {"amount": amount, "risk_level": risk_level}
-        }
-        reasoning_chain.append(reasoning_step)
+        # Normalize
+        total_prob = fraud_prob + legitimate_prob
+        if total_prob > 0:
+            fraud_prob /= total_prob
+            legitimate_prob /= total_prob
         
         return {
-            "score": risk_score,
-            "level": risk_level,
-            "amount": amount,
-            "reasoning": reasoning_step["reasoning"]
+            "fraud_probability": fraud_prob,
+            "legitimate_probability": legitimate_prob,
+            "confidence": max(fraud_prob, legitimate_prob)
+        }
+
+
+class UncertaintyQuantifier:
+    """Quantify uncertainty in risk assessments."""
+    
+    def __init__(self):
+        self.confidence_factors = {
+            "data_completeness": 0.3,
+            "model_consensus": 0.3,
+            "historical_similarity": 0.2,
+            "feature_reliability": 0.2
         }
     
-    async def _assess_velocity_risk(self, context_data: Dict[str, Any], reasoning_chain: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Assess risk based on transaction velocity"""
-        tx_count_1h = context_data.get("tx_count_1h", 0)
-        tx_count_24h = context_data.get("tx_count_24h", 0)
-        amount_1h = context_data.get("amount_1h", 0)
+    def quantify_uncertainty(
+        self, 
+        transaction: Dict[str, Any], 
+        risk_components: Dict[str, float],
+        historical_data: List[Dict[str, Any]] = None
+    ) -> Dict[str, float]:
+        """Quantify uncertainty in risk assessment."""
         
-        model = self.risk_models["velocity_risk"]
-        risk_factors = []
-        total_risk = 0.0
+        uncertainty_metrics = {}
         
-        # Check 1-hour transaction count
-        if tx_count_1h >= model["thresholds"]["tx_1h"]:
-            factor_risk = min(1.0, tx_count_1h / 10) * model["weights"]["tx_1h"]
-            total_risk += factor_risk
-            risk_factors.append(f"{tx_count_1h} transactions in 1 hour")
+        # Data completeness uncertainty
+        completeness = self._assess_data_completeness(transaction)
+        uncertainty_metrics["epistemic_uncertainty"] = 1 - completeness
         
-        # Check 24-hour transaction count
-        if tx_count_24h >= model["thresholds"]["tx_24h"]:
-            factor_risk = min(1.0, tx_count_24h / 50) * model["weights"]["tx_24h"]
-            total_risk += factor_risk
-            risk_factors.append(f"{tx_count_24h} transactions in 24 hours")
-        
-        # Check 1-hour amount
-        if amount_1h >= model["thresholds"]["amount_1h"]:
-            factor_risk = min(1.0, amount_1h / 20000) * model["weights"]["amount_1h"]
-            total_risk += factor_risk
-            risk_factors.append(f"${amount_1h:,.2f} in 1 hour")
-        
-        risk_score = min(1.0, total_risk)
-        reasoning_step = {
-            "factor": "velocity_risk",
-            "reasoning": f"Velocity analysis: {', '.join(risk_factors) if risk_factors else 'Normal transaction velocity'}",
-            "risk_score": risk_score,
-            "evidence": {"tx_1h": tx_count_1h, "tx_24h": tx_count_24h, "amount_1h": amount_1h}
-        }
-        reasoning_chain.append(reasoning_step)
-        
-        return {
-            "score": risk_score,
-            "factors": risk_factors,
-            "tx_count_1h": tx_count_1h,
-            "tx_count_24h": tx_count_24h,
-            "amount_1h": amount_1h,
-            "reasoning": reasoning_step["reasoning"]
-        }
-    
-    async def _assess_geographic_risk(self, transaction_data: Dict[str, Any], reasoning_chain: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Assess risk based on geographic location"""
-        location = transaction_data.get("location", {})
-        country = location.get("country", "unknown")
-        
-        model = self.risk_models["geographic_risk"]
-        
-        if country == "unknown":
-            risk_score = model["risk_scores"]["unknown"]
-            risk_level = "medium"
-            reasoning = "Unknown location increases risk"
-        elif country in model["high_risk_countries"]:
-            risk_score = model["risk_scores"]["high_risk"]
-            risk_level = "high"
-            reasoning = f"Transaction from high-risk country: {country}"
-        elif country in model["medium_risk_countries"]:
-            risk_score = model["risk_scores"]["medium_risk"]
-            risk_level = "medium"
-            reasoning = f"Transaction from medium-risk country: {country}"
+        # Model uncertainty (variability in risk components)
+        if len(risk_components) > 1:
+            risk_variance = np.var(list(risk_components.values()))
+            uncertainty_metrics["aleatoric_uncertainty"] = min(1.0, risk_variance * 2)
         else:
-            risk_score = model["risk_scores"]["domestic"]
-            risk_level = "low"
-            reasoning = f"Transaction from low-risk country: {country}"
+            uncertainty_metrics["aleatoric_uncertainty"] = 0.5
         
-        reasoning_step = {
-            "factor": "geographic_risk",
-            "reasoning": reasoning,
-            "risk_score": risk_score,
-            "evidence": {"country": country, "risk_level": risk_level}
-        }
-        reasoning_chain.append(reasoning_step)
-        
-        return {
-            "score": risk_score,
-            "country": country,
-            "risk_level": risk_level,
-            "reasoning": reasoning
-        }
-    
-    async def _assess_temporal_risk(self, transaction_data: Dict[str, Any], reasoning_chain: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Assess risk based on transaction timing"""
-        try:
-            timestamp = transaction_data.get("timestamp", "")
-            tx_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            hour = tx_time.hour
-            is_weekend = tx_time.weekday() >= 5
-        except:
-            reasoning_step = {
-                "factor": "temporal_risk",
-                "reasoning": "Invalid timestamp, assuming medium risk",
-                "risk_score": 0.5,
-                "evidence": {"timestamp": "invalid"}
-            }
-            reasoning_chain.append(reasoning_step)
-            return {"score": 0.5, "reasoning": "Invalid timestamp"}
-        
-        model = self.risk_models["temporal_risk"]
-        risk_score = 0.1  # Base risk
-        risk_factors = []
-        
-        # Check for high-risk hours
-        if hour in model["high_risk_hours"]:
-            risk_score += 0.4
-            risk_factors.append(f"Transaction at {hour}:00 (high-risk hour)")
-        
-        # Check weekend multiplier
-        if is_weekend:
-            risk_score *= model["weekend_multiplier"]
-            risk_factors.append("Weekend transaction")
-        
-        risk_score = min(1.0, risk_score)
-        
-        reasoning_step = {
-            "factor": "temporal_risk",
-            "reasoning": f"Time-based risk: {', '.join(risk_factors) if risk_factors else 'Normal business hours'}",
-            "risk_score": risk_score,
-            "evidence": {"hour": hour, "is_weekend": is_weekend, "risk_factors": risk_factors}
-        }
-        reasoning_chain.append(reasoning_step)
-        
-        return {
-            "score": risk_score,
-            "hour": hour,
-            "is_weekend": is_weekend,
-            "risk_factors": risk_factors,
-            "reasoning": reasoning_step["reasoning"]
-        }
-    
-    async def _assess_merchant_risk(self, transaction_data: Dict[str, Any], reasoning_chain: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Assess risk based on merchant category"""
-        merchant_category = transaction_data.get("merchant_category", "unknown")
-        model = self.risk_models["merchant_risk"]
-        
-        if merchant_category in model["high_risk_categories"]:
-            risk_score = model["risk_scores"]["high_risk"]
-            risk_level = "high"
-            reasoning = f"High-risk merchant category: {merchant_category}"
-        elif merchant_category in model["medium_risk_categories"]:
-            risk_score = model["risk_scores"]["medium_risk"]
-            risk_level = "medium"
-            reasoning = f"Medium-risk merchant category: {merchant_category}"
+        # Historical similarity uncertainty
+        if historical_data:
+            similarity = self._calculate_historical_similarity(transaction, historical_data)
+            uncertainty_metrics["similarity_confidence"] = similarity
         else:
-            risk_score = model["risk_scores"]["low_risk"]
-            risk_level = "low"
-            reasoning = f"Low-risk merchant category: {merchant_category}"
+            uncertainty_metrics["similarity_confidence"] = 0.3
         
-        reasoning_step = {
-            "factor": "merchant_risk",
-            "reasoning": reasoning,
-            "risk_score": risk_score,
-            "evidence": {"merchant_category": merchant_category, "risk_level": risk_level}
-        }
-        reasoning_chain.append(reasoning_step)
+        # Overall uncertainty
+        epistemic = uncertainty_metrics["epistemic_uncertainty"]
+        aleatoric = uncertainty_metrics["aleatoric_uncertainty"]
+        uncertainty_metrics["total_uncertainty"] = math.sqrt(epistemic**2 + aleatoric**2)
         
-        return {
-            "score": risk_score,
-            "merchant_category": merchant_category,
-            "risk_level": risk_level,
-            "reasoning": reasoning
-        }
+        # Confidence interval width (approximate)
+        uncertainty_metrics["confidence_interval_width"] = (
+            2 * uncertainty_metrics["total_uncertainty"]
+        )
+        
+        return uncertainty_metrics
     
-    async def _assess_behavioral_risk(self, transaction_data: Dict[str, Any], user_profile: Dict[str, Any], reasoning_chain: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Assess risk based on behavioral patterns"""
-        if not user_profile:
-            reasoning_step = {
-                "factor": "behavioral_risk",
-                "reasoning": "No user profile available, assuming medium risk",
-                "risk_score": 0.5,
-                "evidence": {"profile_available": False}
-            }
-            reasoning_chain.append(reasoning_step)
-            return {"score": 0.5, "reasoning": "No user profile"}
+    def _assess_data_completeness(self, transaction: Dict[str, Any]) -> float:
+        """Assess completeness of transaction data."""
+        required_fields = [
+            "amount", "timestamp", "user_id", "country", "payment_method",
+            "device_id", "ip_address", "velocity_1h", "velocity_24h"
+        ]
         
-        risk_score = 0.0
-        risk_factors = []
-        
-        # Check amount deviation from typical spending
-        typical_amount = user_profile.get("avg_transaction_amount", 100)
-        current_amount = transaction_data.get("amount", 0)
-        
-        if current_amount > typical_amount * 5:
-            risk_score += 0.4
-            risk_factors.append(f"Amount {current_amount/typical_amount:.1f}x typical spending")
-        elif current_amount > typical_amount * 2:
-            risk_score += 0.2
-            risk_factors.append(f"Amount {current_amount/typical_amount:.1f}x typical spending")
-        
-        # Check merchant category deviation
-        typical_categories = user_profile.get("frequent_categories", [])
-        current_category = transaction_data.get("merchant_category", "unknown")
-        
-        if current_category not in typical_categories and current_category != "unknown":
-            risk_score += 0.3
-            risk_factors.append(f"Unusual merchant category: {current_category}")
-        
-        # Check device/location consistency
-        if not transaction_data.get("device_info") and user_profile.get("typically_has_device_info", True):
-            risk_score += 0.2
-            risk_factors.append("Missing device information")
-        
-        risk_score = min(1.0, risk_score)
-        
-        reasoning_step = {
-            "factor": "behavioral_risk",
-            "reasoning": f"Behavioral analysis: {', '.join(risk_factors) if risk_factors else 'Consistent with user behavior'}",
-            "risk_score": risk_score,
-            "evidence": {
-                "typical_amount": typical_amount,
-                "current_amount": current_amount,
-                "typical_categories": typical_categories,
-                "current_category": current_category,
-                "risk_factors": risk_factors
-            }
-        }
-        reasoning_chain.append(reasoning_step)
-        
-        return {
-            "score": risk_score,
-            "risk_factors": risk_factors,
-            "reasoning": reasoning_step["reasoning"]
-        }
+        present_fields = sum(1 for field in required_fields if transaction.get(field) is not None)
+        return present_fields / len(required_fields)
     
-    async def _calculate_composite_risk(self, risk_components: Dict[str, Dict[str, Any]], reasoning_chain: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calculate composite risk score from individual components"""
-        # Default weights for risk components
-        default_weights = {
-            "amount": 0.20,
-            "velocity": 0.20,
-            "geographic": 0.20,
-            "temporal": 0.15,
-            "merchant": 0.15,
-            "behavioral": 0.10
-        }
+    def _calculate_historical_similarity(
+        self, 
+        transaction: Dict[str, Any], 
+        historical_data: List[Dict[str, Any]]
+    ) -> float:
+        """Calculate similarity to historical transactions."""
         
-        # Use learned weights if available
-        weights = {}
-        for component in default_weights:
-            if component in self.risk_factors and "weight" in self.risk_factors[component]:
-                weights[component] = self.risk_factors[component]["weight"]
+        if not historical_data:
+            return 0.0
+        
+        similarities = []
+        current_amount = float(transaction.get("amount", 0))
+        current_country = transaction.get("country", "")
+        
+        for hist_tx in historical_data[-100:]:  # Last 100 transactions
+            similarity_factors = []
+            
+            # Amount similarity
+            hist_amount = float(hist_tx.get("amount", 0))
+            if max(current_amount, hist_amount) > 0:
+                amount_similarity = min(current_amount, hist_amount) / max(current_amount, hist_amount)
+                similarity_factors.append(amount_similarity)
+            
+            # Country similarity
+            if current_country == hist_tx.get("country", ""):
+                similarity_factors.append(1.0)
             else:
-                weights[component] = default_weights[component]
+                similarity_factors.append(0.0)
+            
+            if similarity_factors:
+                similarities.append(np.mean(similarity_factors))
         
-        # Normalize weights
-        total_weight = sum(weights.values())
-        weights = {k: v / total_weight for k, v in weights.items()}
+        return max(similarities) if similarities else 0.0
+
+
+class RiskAssessmentAgent(BaseFraudDetectionAgent):
+    """Specialized agent for comprehensive risk assessment with uncertainty quantification."""
+    
+    def __init__(self, agent_id: str, mcp_client: MCPClient):
+        super().__init__(agent_id, mcp_client, "risk_assessment")
         
-        # Calculate weighted score
-        weighted_score = 0.0
-        component_contributions = {}
+        # Specialized components
+        self.probabilistic_model = ProbabilisticRiskModel()
+        self.uncertainty_quantifier = UncertaintyQuantifier()
         
-        for component, risk_data in risk_components.items():
-            if component in weights:
-                component_score = risk_data.get("score", 0.0)
-                contribution = weights[component] * component_score
-                weighted_score += contribution
-                component_contributions[component] = {
-                    "score": component_score,
-                    "weight": weights[component],
-                    "contribution": contribution
-                }
+        # Risk assessment configuration
+        self.risk_weights = {
+            "amount_risk": 0.25,
+            "velocity_risk": 0.20,
+            "geographic_risk": 0.20,
+            "account_risk": 0.15,
+            "behavioral_risk": 0.10,
+            "temporal_risk": 0.10
+        }
         
-        # Apply non-linear scaling for extreme cases
-        if weighted_score > 0.8:
-            final_score = 0.8 + (weighted_score - 0.8) * 1.5  # Amplify high risk
-        elif weighted_score < 0.2:
-            final_score = weighted_score * 0.5  # Reduce very low risk
-        else:
-            final_score = weighted_score
+        # Historical data for context
+        self.user_profiles: Dict[str, Dict[str, Any]] = {}
+        self.global_statistics: Dict[str, float] = {}
+    
+    async def _load_specialized_knowledge(self):
+        """Load risk assessment specific knowledge."""
         
-        final_score = min(1.0, max(0.0, final_score))
-        
-        reasoning_step = {
-            "factor": "composite_calculation",
-            "reasoning": f"Weighted composite score: {final_score:.3f} from {len(risk_components)} components",
-            "risk_score": final_score,
-            "evidence": {
-                "component_contributions": component_contributions,
-                "weights": weights,
-                "weighted_score": weighted_score,
-                "final_score": final_score
+        # Load risk thresholds and weights
+        risk_knowledge = {
+            "high_risk_countries": ["XX", "YY", "ZZ"],  # Placeholder
+            "suspicious_amounts": {
+                "small_test_amounts": (0.01, 5.0),
+                "large_amounts": (5000, float('inf')),
+                "round_amounts": [100, 200, 500, 1000]
+            },
+            "velocity_thresholds": {
+                "high_velocity_1h": 10,
+                "high_velocity_24h": 50,
+                "suspicious_burst": 5  # transactions in 5 minutes
+            },
+            "account_risk_factors": {
+                "new_account_days": 30,
+                "dormant_reactivation_days": 180,
+                "first_transaction_risk": 0.3
             }
         }
-        reasoning_chain.append(reasoning_step)
         
-        return {
-            "final_score": final_score,
-            "weighted_score": weighted_score,
-            "component_contributions": component_contributions,
-            "weights_used": weights
+        self.knowledge_base.add_pattern("risk_thresholds", risk_knowledge)
+        
+        # Initialize global statistics (would be loaded from database)
+        self.global_statistics = {
+            "avg_transaction_amount": 150.0,
+            "fraud_rate_by_country": {"US": 0.015, "GB": 0.018, "FR": 0.020},
+            "fraud_rate_by_hour": {h: 0.02 + 0.01 * (abs(h - 12) / 12) for h in range(24)}
         }
+        
+        logger.info(f"Risk Assessment Agent {self.agent_id} loaded specialized knowledge")
     
-    async def _calculate_confidence_interval(self, composite_risk: Dict[str, Any], transaction_data: Dict[str, Any], context_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Calculate confidence interval for risk assessment"""
-        base_score = composite_risk["final_score"]
+    async def analyze_transaction(self, transaction: Dict[str, Any]) -> Dict[str, Any]:
+        """Perform comprehensive risk assessment with uncertainty quantification."""
         
-        # Factors affecting confidence
-        data_completeness = 0.0
-        data_completeness += 0.2 if transaction_data.get("amount") else 0
-        data_completeness += 0.2 if transaction_data.get("timestamp") else 0
-        data_completeness += 0.2 if transaction_data.get("location") else 0
-        data_completeness += 0.2 if transaction_data.get("merchant_category") else 0
-        data_completeness += 0.2 if context_data else 0
+        start_time = datetime.now()
+        transaction_id = transaction.get("transaction_id", "unknown")
+        user_id = transaction.get("user_id", "unknown")
         
-        # Historical accuracy
-        historical_accuracy = (self.performance_metrics["correct_decisions"] / 
-                             max(1, self.performance_metrics["total_decisions"]))
-        
-        # Confidence width (narrower = more confident)
-        confidence_width = 0.1 + 0.2 * (1 - data_completeness) + 0.1 * (1 - historical_accuracy)
-        
-        lower_bound = max(0.0, base_score - confidence_width)
-        upper_bound = min(1.0, base_score + confidence_width)
-        
-        return {
-            "point_estimate": base_score,
-            "lower_bound": lower_bound,
-            "upper_bound": upper_bound,
-            "confidence_width": confidence_width * 2,
-            "confidence_level": 0.95,
-            "data_completeness": data_completeness,
-            "historical_accuracy": historical_accuracy
-        }
-    
-    async def _generate_risk_explanation(self, reasoning_chain: List[Dict[str, Any]]) -> str:
-        """Generate human-readable risk explanation"""
-        if not reasoning_chain:
-            return "No risk factors analyzed."
-        
-        explanations = []
-        for step in reasoning_chain:
-            if step.get("risk_score", 0) > 0.1:  # Only include significant factors
-                explanations.append(step["reasoning"])
-        
-        if not explanations:
-            return "All risk factors are within normal ranges."
-        
-        return " | ".join(explanations)
-    
-    def _determine_risk_level(self, risk_score: float) -> str:
-        """Determine categorical risk level from numeric score"""
-        if risk_score >= 0.8:
-            return "critical"
-        elif risk_score >= 0.6:
-            return "high"
-        elif risk_score >= 0.4:
-            return "medium"
-        else:
-            return "low"
-    
-    async def _generate_recommendations(self, composite_risk: Dict[str, Any], risk_level: str, reasoning_chain: List[Dict[str, Any]]) -> List[str]:
-        """Generate actionable recommendations based on risk assessment"""
-        recommendations = []
-        risk_score = composite_risk["final_score"]
-        
-        if risk_level == "critical":
-            recommendations.append("Immediately decline transaction and flag account for review")
-            recommendations.append("Notify fraud team for urgent investigation")
-        elif risk_level == "high":
-            recommendations.append("Hold transaction for manual review")
-            recommendations.append("Request additional authentication from user")
-        elif risk_level == "medium":
-            recommendations.append("Apply enhanced monitoring for this transaction")
-            recommendations.append("Consider step-up authentication")
-        else:
-            recommendations.append("Process transaction with standard monitoring")
-        
-        # Add specific recommendations based on risk factors
-        high_risk_factors = [step for step in reasoning_chain if step.get("risk_score", 0) > 0.5]
-        
-        for factor in high_risk_factors:
-            factor_type = factor.get("factor", "")
-            if factor_type == "velocity_risk":
-                recommendations.append("Monitor user for unusual transaction patterns")
-            elif factor_type == "geographic_risk":
-                recommendations.append("Verify user location and travel status")
-            elif factor_type == "behavioral_risk":
-                recommendations.append("Review user's recent spending patterns")
-        
-        return recommendations
-    
-    async def _update_confidence_models(self, feedback: Dict[str, Any]) -> None:
-        """Update confidence interval models based on feedback"""
         try:
-            predicted_interval = feedback.get("confidence_interval", {})
-            actual_fraud = feedback.get("actual_fraud", False)
+            # Get or create user profile
+            user_profile = self._get_user_profile(user_id, transaction)
             
-            if predicted_interval:
-                lower = predicted_interval.get("lower_bound", 0)
-                upper = predicted_interval.get("upper_bound", 1)
-                actual_value = 1.0 if actual_fraud else 0.0
-                
-                # Check if actual value fell within predicted interval
-                within_interval = lower <= actual_value <= upper
-                
-                # Update confidence model accuracy
-                confidence_key = "confidence_accuracy"
-                if confidence_key not in self.knowledge_base:
-                    self.knowledge_base[confidence_key] = {"correct": 0, "total": 0}
-                
-                self.knowledge_base[confidence_key]["total"] += 1
-                if within_interval:
-                    self.knowledge_base[confidence_key]["correct"] += 1
-                
+            # Step 1: Calculate individual risk components
+            risk_components = await self._calculate_risk_components(transaction, user_profile)
+            
+            # Step 2: Apply probabilistic model
+            evidence = self._extract_evidence(transaction, risk_components)
+            probability_results = self.probabilistic_model.calculate_posterior_probability(evidence)
+            
+            # Step 3: Quantify uncertainty
+            uncertainty_metrics = self.uncertainty_quantifier.quantify_uncertainty(
+                transaction, risk_components, self._get_historical_data(user_id)
+            )
+            
+            # Step 4: Calculate final risk score
+            risk_score = self._calculate_final_risk_score(risk_components, probability_results)
+            
+            # Step 5: Determine confidence
+            confidence = self._calculate_assessment_confidence(probability_results, uncertainty_metrics)
+            
+            # Step 6: Generate risk factors and explanations
+            risk_factors = self._generate_detailed_risk_factors(risk_components, evidence)
+            protective_factors = self._generate_protective_factors(risk_components, user_profile)
+            
+            # Step 7: Update user profile
+            self._update_user_profile(user_id, transaction, risk_score)
+            
+            processing_time = (datetime.now() - start_time).total_seconds() * 1000
+            
+            analysis_results = {
+                "agent_type": "risk_assessment",
+                "risk_score": risk_score,
+                "confidence": confidence,
+                "risk_factors": risk_factors,
+                "protective_factors": protective_factors,
+                "risk_components": risk_components,
+                "probability_assessment": probability_results,
+                "uncertainty_metrics": uncertainty_metrics,
+                "processing_time_ms": processing_time,
+                "user_profile_available": user_id in self.user_profiles,
+                "evidence_strength": len([e for e in evidence.values() if e])
+            }
+            
+            logger.debug(
+                f"Risk assessment completed for {transaction_id}: "
+                f"risk={risk_score:.3f}, confidence={confidence:.3f}, "
+                f"fraud_prob={probability_results['fraud_probability']:.3f}"
+            )
+            
+            return analysis_results
+            
         except Exception as e:
-            logger.error(f"Confidence model update failed: {str(e)}")
+            logger.error(f"Risk assessment analysis error: {e}")
+            return {
+                "agent_type": "risk_assessment",
+                "risk_score": 0.5,
+                "confidence": 0.1,
+                "risk_factors": [f"Risk assessment error: {str(e)}"],
+                "protective_factors": [],
+                "error": str(e)
+            }
     
-    async def get_risk_factor_importance(self) -> Dict[str, float]:
-        """Get current importance weights for risk factors"""
-        importance = {}
+    async def _calculate_risk_components(self, transaction: Dict[str, Any], user_profile: Dict[str, Any]) -> Dict[str, float]:
+        """Calculate individual risk components."""
         
-        for factor_name, factor_data in self.risk_factors.items():
-            importance[factor_name] = factor_data.get("weight", 1.0)
+        components = {}
         
-        # Add default factors if not present
-        default_factors = ["amount", "velocity", "geographic", "temporal", "behavioral"]
-        for factor in default_factors:
-            if factor not in importance:
-                importance[factor] = 1.0
+        # Amount risk
+        components["amount_risk"] = self._assess_amount_risk(transaction, user_profile)
         
-        return importance
+        # Velocity risk
+        components["velocity_risk"] = self._assess_velocity_risk(transaction, user_profile)
+        
+        # Geographic risk
+        components["geographic_risk"] = self._assess_geographic_risk(transaction, user_profile)
+        
+        # Account risk
+        components["account_risk"] = self._assess_account_risk(transaction, user_profile)
+        
+        # Behavioral risk
+        components["behavioral_risk"] = self._assess_behavioral_risk(transaction, user_profile)
+        
+        # Temporal risk
+        components["temporal_risk"] = self._assess_temporal_risk(transaction, user_profile)
+        
+        return components
+    
+    def _assess_amount_risk(self, transaction: Dict[str, Any], user_profile: Dict[str, Any]) -> float:
+        """Assess risk based on transaction amount."""
+        
+        amount = float(transaction.get("amount", 0))
+        user_avg_amount = user_profile.get("avg_amount", self.global_statistics["avg_transaction_amount"])
+        
+        risk_factors = []
+        
+        # Very small amounts (card testing)
+        if amount < 5:
+            risk_factors.append(0.6)
+        
+        # Very large amounts
+        if amount > 5000:
+            risk_factors.append(0.4)
+        elif amount > 1000:
+            risk_factors.append(0.2)
+        
+        # Deviation from user average
+        if user_avg_amount > 0:
+            ratio = amount / user_avg_amount
+            if ratio > 10:  # More than 10x average
+                risk_factors.append(0.8)
+            elif ratio > 5:  # More than 5x average
+                risk_factors.append(0.4)
+            elif ratio < 0.1:  # Less than 10% of average
+                risk_factors.append(0.3)
+        
+        # Round amounts
+        if amount == round(amount) and amount >= 100:
+            risk_factors.append(0.2)
+        
+        return min(1.0, max(risk_factors) if risk_factors else 0.1)
+    
+    def _assess_velocity_risk(self, transaction: Dict[str, Any], user_profile: Dict[str, Any]) -> float:
+        """Assess risk based on transaction velocity."""
+        
+        velocity_1h = transaction.get("velocity_1h", 0)
+        velocity_24h = transaction.get("velocity_24h", 0)
+        user_avg_daily = user_profile.get("avg_daily_transactions", 5)
+        
+        risk_factors = []
+        
+        # High absolute velocity
+        if velocity_1h > 10:
+            risk_factors.append(0.9)
+        elif velocity_1h > 5:
+            risk_factors.append(0.6)
+        
+        if velocity_24h > 50:
+            risk_factors.append(0.8)
+        elif velocity_24h > 20:
+            risk_factors.append(0.4)
+        
+        # Velocity relative to user pattern
+        if velocity_24h > user_avg_daily * 5:
+            risk_factors.append(0.7)
+        elif velocity_24h > user_avg_daily * 3:
+            risk_factors.append(0.4)
+        
+        return min(1.0, max(risk_factors) if risk_factors else 0.1)
+    
+    def _assess_geographic_risk(self, transaction: Dict[str, Any], user_profile: Dict[str, Any]) -> float:
+        """Assess risk based on geographic factors."""
+        
+        country = transaction.get("country", "")
+        user_countries = user_profile.get("countries", [country])
+        
+        risk_factors = []
+        
+        # High-risk country
+        high_risk_countries = self.knowledge_base.patterns.get("risk_thresholds", {}).get("data", {}).get("high_risk_countries", [])
+        if country in high_risk_countries:
+            risk_factors.append(0.6)
+        
+        # New country for user
+        if country not in user_countries:
+            risk_factors.append(0.3)
+        
+        # Country-specific fraud rate
+        country_fraud_rate = self.global_statistics.get("fraud_rate_by_country", {}).get(country, 0.02)
+        normalized_country_risk = min(1.0, country_fraud_rate * 25)  # Scale to 0-1
+        risk_factors.append(normalized_country_risk)
+        
+        return min(1.0, max(risk_factors) if risk_factors else 0.1)
+    
+    def _assess_account_risk(self, transaction: Dict[str, Any], user_profile: Dict[str, Any]) -> float:
+        """Assess risk based on account characteristics."""
+        
+        account_age_days = transaction.get("account_age_days", 365)
+        is_first_transaction = transaction.get("is_first_transaction", False)
+        
+        risk_factors = []
+        
+        # New account
+        if account_age_days < 1:
+            risk_factors.append(0.8)
+        elif account_age_days < 7:
+            risk_factors.append(0.5)
+        elif account_age_days < 30:
+            risk_factors.append(0.3)
+        
+        # First transaction
+        if is_first_transaction:
+            risk_factors.append(0.4)
+        
+        # Account dormancy (would need historical data)
+        last_transaction_days = user_profile.get("days_since_last_transaction", 1)
+        if last_transaction_days > 180:
+            risk_factors.append(0.3)  # Dormant account reactivation
+        
+        return min(1.0, max(risk_factors) if risk_factors else 0.1)
+    
+    def _assess_behavioral_risk(self, transaction: Dict[str, Any], user_profile: Dict[str, Any]) -> float:
+        """Assess risk based on behavioral patterns."""
+        
+        device_id = transaction.get("device_id", "")
+        user_devices = user_profile.get("devices", [device_id])
+        session_duration = transaction.get("session_duration", 300)
+        
+        risk_factors = []
+        
+        # New device
+        if device_id not in user_devices:
+            risk_factors.append(0.4)
+        
+        # Very short session
+        if session_duration < 30:
+            risk_factors.append(0.3)
+        
+        # Unusual browsing pattern
+        pages_visited = transaction.get("pages_visited", 3)
+        if pages_visited < 2:
+            risk_factors.append(0.2)
+        
+        return min(1.0, max(risk_factors) if risk_factors else 0.1)
+    
+    def _assess_temporal_risk(self, transaction: Dict[str, Any], user_profile: Dict[str, Any]) -> float:
+        """Assess risk based on temporal patterns."""
+        
+        try:
+            timestamp = datetime.fromisoformat(transaction["timestamp"])
+            hour = timestamp.hour
+            day_of_week = timestamp.weekday()
+            
+            risk_factors = []
+            
+            # Unusual hours (2 AM - 5 AM)
+            if 2 <= hour <= 5:
+                risk_factors.append(0.4)
+            
+            # Hour-specific fraud rate
+            hour_fraud_rate = self.global_statistics.get("fraud_rate_by_hour", {}).get(hour, 0.02)
+            normalized_hour_risk = min(1.0, hour_fraud_rate * 25)
+            risk_factors.append(normalized_hour_risk)
+            
+            # Weekend vs weekday patterns (simplified)
+            if day_of_week >= 5:  # Weekend
+                risk_factors.append(0.1)
+            
+            return min(1.0, max(risk_factors) if risk_factors else 0.1)
+            
+        except:
+            return 0.2  # Default risk if timestamp parsing fails
+    
+    def _extract_evidence(self, transaction: Dict[str, Any], risk_components: Dict[str, float]) -> Dict[str, bool]:
+        """Extract boolean evidence for probabilistic model."""
+        
+        evidence = {
+            "high_amount": risk_components.get("amount_risk", 0) > 0.5,
+            "new_device": "new/unknown device" in str(transaction.get("risk_factors", [])),
+            "unusual_location": risk_components.get("geographic_risk", 0) > 0.4,
+            "high_velocity": risk_components.get("velocity_risk", 0) > 0.5,
+            "new_account": transaction.get("account_age_days", 365) < 30
+        }
+        
+        return evidence
+    
+    def _calculate_final_risk_score(self, risk_components: Dict[str, float], probability_results: Dict[str, float]) -> float:
+        """Calculate final weighted risk score."""
+        
+        # Weighted average of risk components
+        component_score = sum(
+            risk_components[component] * self.risk_weights[component]
+            for component in risk_components
+            if component in self.risk_weights
+        )
+        
+        # Probabilistic model score
+        prob_score = probability_results["fraud_probability"]
+        
+        # Combine scores (70% components, 30% probabilistic)
+        final_score = 0.7 * component_score + 0.3 * prob_score
+        
+        return min(1.0, max(0.0, final_score))
+    
+    def _calculate_assessment_confidence(self, probability_results: Dict[str, float], uncertainty_metrics: Dict[str, float]) -> float:
+        """Calculate confidence in the risk assessment."""
+        
+        # Base confidence from probabilistic model
+        prob_confidence = probability_results.get("confidence", 0.5)
+        
+        # Reduce confidence based on uncertainty
+        total_uncertainty = uncertainty_metrics.get("total_uncertainty", 0.5)
+        uncertainty_penalty = min(0.4, total_uncertainty)  # Max 40% reduction
+        
+        final_confidence = max(0.1, prob_confidence - uncertainty_penalty)
+        
+        return final_confidence
+    
+    def _generate_detailed_risk_factors(self, risk_components: Dict[str, float], evidence: Dict[str, bool]) -> List[str]:
+        """Generate detailed risk factor explanations."""
+        
+        risk_factors = []
+        
+        # Component-based factors
+        for component, score in risk_components.items():
+            if score > 0.5:
+                component_name = component.replace("_", " ").title()
+                risk_factors.append(f"{component_name}: {score:.2f} risk score")
+        
+        # Evidence-based factors
+        for factor, is_present in evidence.items():
+            if is_present:
+                factor_name = factor.replace("_", " ").title()
+                risk_factors.append(f"{factor_name} detected")
+        
+        return risk_factors[:5]  # Limit to top 5
+    
+    def _generate_protective_factors(self, risk_components: Dict[str, float], user_profile: Dict[str, Any]) -> List[str]:
+        """Generate protective factor explanations."""
+        
+        protective_factors = []
+        
+        # Low risk components
+        for component, score in risk_components.items():
+            if score < 0.3:
+                component_name = component.replace("_", " ").title()
+                protective_factors.append(f"Low {component_name.lower()}")
+        
+        # User profile factors
+        if user_profile.get("transaction_count", 0) > 100:
+            protective_factors.append("Established transaction history")
+        
+        if user_profile.get("avg_amount", 0) > 0:
+            protective_factors.append("Consistent spending patterns")
+        
+        return protective_factors[:3]  # Limit to top 3
+    
+    def _get_user_profile(self, user_id: str, transaction: Dict[str, Any]) -> Dict[str, Any]:
+        """Get or create user profile."""
+        
+        if user_id not in self.user_profiles:
+            self.user_profiles[user_id] = {
+                "user_id": user_id,
+                "transaction_count": 0,
+                "avg_amount": 0.0,
+                "countries": [],
+                "devices": [],
+                "avg_daily_transactions": 1,
+                "first_seen": datetime.now().isoformat(),
+                "last_seen": datetime.now().isoformat(),
+                "days_since_last_transaction": 0
+            }
+        
+        return self.user_profiles[user_id]
+    
+    def _update_user_profile(self, user_id: str, transaction: Dict[str, Any], risk_score: float):
+        """Update user profile with new transaction."""
+        
+        profile = self.user_profiles[user_id]
+        
+        # Update transaction count and average amount
+        current_count = profile["transaction_count"]
+        current_avg = profile["avg_amount"]
+        new_amount = float(transaction.get("amount", 0))
+        
+        profile["transaction_count"] = current_count + 1
+        profile["avg_amount"] = (current_avg * current_count + new_amount) / (current_count + 1)
+        
+        # Update countries and devices
+        country = transaction.get("country", "")
+        if country and country not in profile["countries"]:
+            profile["countries"].append(country)
+        
+        device_id = transaction.get("device_id", "")
+        if device_id and device_id not in profile["devices"]:
+            profile["devices"].append(device_id)
+        
+        # Update timestamps
+        profile["last_seen"] = datetime.now().isoformat()
+    
+    def _get_historical_data(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get historical transaction data for user (placeholder)."""
+        # In real implementation, this would query a database
+        return []

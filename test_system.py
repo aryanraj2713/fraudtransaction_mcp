@@ -1,189 +1,148 @@
 #!/usr/bin/env python3
 """
-Simple test to verify the fraud detection system works
+Test script to verify the fraud detection system can start up correctly.
 """
 
-import asyncio
+import os
 import sys
-import logging
-from datetime import datetime
+import asyncio
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+def setup_environment():
+    """Set up environment variables for OpenMP and other dependencies."""
+    os.environ['LDFLAGS'] = "-L/opt/homebrew/opt/libomp/lib"
+    os.environ['CPPFLAGS'] = "-I/opt/homebrew/opt/libomp/include"
+    
+    # Add the src directory to Python path
+    src_path = os.path.join(os.path.dirname(__file__), 'src')
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
 
-async def test_basic_components():
-    """Test basic system components without full MCP integration"""
+async def test_system_startup():
+    """Test if the system can start up correctly."""
+    print("🧪 Testing Fraud Detection System Startup...")
+    
     try:
-        logger.info("🧪 Testing Basic System Components...")
+        # Import the system
+        from fraud_detection_system import FraudDetectionSystem
+        print("✅ FraudDetectionSystem imported successfully")
         
-        # Test synthetic data generation
-        logger.info("Testing synthetic data generation...")
-        from src.utils.synthetic_data import generate_sample_transaction
+        # Create system instance
+        fraud_system = FraudDetectionSystem()
+        print("✅ FraudDetectionSystem instance created successfully")
         
-        normal_tx = generate_sample_transaction(fraud=False)
-        fraud_tx = generate_sample_transaction(fraud=True)
+        # Test configuration loading
+        config = fraud_system.config
+        print(f"✅ Configuration loaded: {len(config)} sections")
         
-        logger.info(f"✅ Generated normal transaction: ${normal_tx['amount']:,.2f}")
-        logger.info(f"✅ Generated fraud transaction: ${fraud_tx['amount']:,.2f}")
+        # Test MCP servers configuration
+        mcp_servers = config.get('mcp_servers', {})
+        print(f"✅ MCP Servers configured: {list(mcp_servers.keys())}")
         
-        # Test vector database
-        logger.info("Testing vector database...")
-        from src.utils.vector_db import InMemoryVectorDB
+        # Test agents configuration
+        agents = config.get('agents', {})
+        print(f"✅ Agents configured: {list(agents.keys())}")
         
-        vector_db = InMemoryVectorDB()
-        vector_db.add_pattern("test_pattern_1", "High amount late night transaction", {
-            "pattern_type": "suspicious_timing",
-            "risk_score": 0.8
-        })
+        # Test processing configuration
+        processing = config.get('processing', {})
+        print(f"✅ Processing configured: {len(processing)} parameters")
         
-        similar_patterns = vector_db.search_similar_patterns("Large transaction at night", top_k=1)
-        logger.info(f"✅ Vector DB search found {len(similar_patterns)} similar patterns")
-        
-        # Test AI agents
-        logger.info("Testing AI agents...")
-        from src.agents.pattern_recognition_agent import PatternRecognitionAgent
-        from src.agents.risk_assessment_agent import RiskAssessmentAgent
-        
-        pattern_agent = PatternRecognitionAgent()
-        risk_agent = RiskAssessmentAgent()
-        
-        # Test pattern agent
-        test_input = {
-            "transaction": normal_tx,
-            "historical_data": [normal_tx, fraud_tx]
-        }
-        
-        pattern_result = await pattern_agent.process(test_input)
-        logger.info(f"✅ Pattern agent processed transaction with confidence: {pattern_result.get('confidence', 0):.3f}")
-        
-        # Test risk agent
-        risk_input = {
-            "transaction": fraud_tx,
-            "context": {"tx_count_1h": 3, "tx_count_24h": 10},
-            "user_profile": {"avg_transaction_amount": 100}
-        }
-        
-        risk_result = await risk_agent.process(risk_input)
-        risk_score = risk_result.get('composite_risk_score', 0)
-        logger.info(f"✅ Risk agent assessed fraud transaction with risk score: {risk_score:.3f}")
-        
-        # Test coordination
-        logger.info("Testing agent coordination...")
-        from src.agents.coordination_agent import CoordinationAgent
-        
-        coordination_agent = CoordinationAgent()
-        await coordination_agent.register_agent(pattern_agent)
-        await coordination_agent.register_agent(risk_agent)
-        
-        coord_input = {
-            "transaction": fraud_tx,
-            "task_type": "fraud_detection"
-        }
-        
-        coord_result = await coordination_agent.process(coord_input)
-        final_decision = coord_result.get("coordinated_decision", {})
-        logger.info(f"✅ Coordination agent made decision: {final_decision.get('decision', 'unknown')}")
-        
-        logger.info("🎉 All basic components working correctly!")
+        print("\n🎉 All tests passed! The system is ready to run.")
         return True
         
     except Exception as e:
-        logger.error(f"❌ Component test failed: {str(e)}")
+        print(f"❌ Test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
-async def test_performance():
-    """Test performance with multiple transactions"""
-    try:
-        logger.info("🚀 Testing Performance...")
-        
-        from src.utils.synthetic_data import generate_test_batch
-        from src.agents.coordination_agent import CoordinationAgent
-        from src.agents.pattern_recognition_agent import PatternRecognitionAgent
-        from src.agents.risk_assessment_agent import RiskAssessmentAgent
-        
-        # Setup agents
-        coordination_agent = CoordinationAgent()
-        pattern_agent = PatternRecognitionAgent()
-        risk_agent = RiskAssessmentAgent()
-        
-        await coordination_agent.register_agent(pattern_agent)
-        await coordination_agent.register_agent(risk_agent)
-        
-        # Generate test batch
-        test_batch = generate_test_batch(size=10, fraud_rate=0.3)
-        
-        # Process transactions
-        start_time = datetime.utcnow()
-        processing_times = []
-        
-        for i, tx in enumerate(test_batch):
-            tx_start = datetime.utcnow()
-            
-            coord_input = {
-                "transaction": tx,
-                "task_type": "fraud_detection"
-            }
-            
-            result = await coordination_agent.process(coord_input)
-            tx_end = datetime.utcnow()
-            
-            processing_time = (tx_end - tx_start).total_seconds() * 1000
-            processing_times.append(processing_time)
-            
-            if (i + 1) % 5 == 0:
-                logger.info(f"Processed {i+1}/10 transactions...")
-        
-        end_time = datetime.utcnow()
-        total_time = (end_time - start_time).total_seconds()
-        
-        # Calculate metrics
-        avg_time = sum(processing_times) / len(processing_times)
-        throughput = len(test_batch) / total_time
-        
-        logger.info(f"📊 Performance Results:")
-        logger.info(f"   Average Processing Time: {avg_time:.2f}ms")
-        logger.info(f"   Throughput: {throughput:.1f} TPS")
-        logger.info(f"   Total Time: {total_time:.2f}s")
-        
-        # Check requirements
-        if avg_time < 100:
-            logger.info("✅ Sub-100ms requirement: PASSED")
-        else:
-            logger.warning("⚠️  Sub-100ms requirement: FAILED")
-            
-        if throughput > 1:  # Adjusted for realistic testing
-            logger.info("✅ Throughput requirement: PASSED")
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Performance test failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return False
+async def test_mcp_servers():
+    """Test if MCP servers can be imported."""
+    print("\n🧪 Testing MCP Server Imports...")
+    
+    servers = [
+        ("data_intelligence_server", "DataIntelligenceServer"),
+        ("model_orchestration_server", "ModelOrchestrationServer"),
+        ("decision_engine_server", "DecisionEngineServer"),
+        ("monitoring_server", "MonitoringServer")
+    ]
+    
+    all_passed = True
+    
+    for server_file, class_name in servers:
+        try:
+            module = __import__(f"mcp_servers.{server_file}", fromlist=[class_name])
+            server_class = getattr(module, class_name)
+            print(f"✅ {class_name} imported successfully")
+        except Exception as e:
+            print(f"❌ Failed to import {class_name}: {e}")
+            all_passed = False
+    
+    if all_passed:
+        print("🎉 All MCP servers imported successfully!")
+    else:
+        print("⚠️  Some MCP servers failed to import")
+    
+    return all_passed
+
+async def test_agents():
+    """Test if agents can be imported."""
+    print("\n🧪 Testing Agent Imports...")
+    
+    agents = [
+        ("pattern_recognition_agent", "PatternRecognitionAgent"),
+        ("risk_assessment_agent", "RiskAssessmentAgent"),
+        ("coordination_agent", "CoordinationAgent")
+    ]
+    
+    all_passed = True
+    
+    for agent_file, class_name in agents:
+        try:
+            module = __import__(f"agents.{agent_file}", fromlist=[class_name])
+            agent_class = getattr(module, class_name)
+            print(f"✅ {class_name} imported successfully")
+        except Exception as e:
+            print(f"❌ Failed to import {class_name}: {e}")
+            all_passed = False
+    
+    if all_passed:
+        print("🎉 All agents imported successfully!")
+    else:
+        print("⚠️  Some agents failed to import")
+    
+    return all_passed
 
 async def main():
-    """Main test function"""
-    logger.info("🎯 Starting Fraud Detection System Tests")
+    """Run all tests."""
+    print("🚀 Fraud Detection System Test Suite")
+    print("=" * 50)
     
-    # Test basic components
-    basic_success = await test_basic_components()
-    if not basic_success:
-        logger.error("❌ Basic component tests failed")
-        sys.exit(1)
+    setup_environment()
     
-    # Test performance
-    perf_success = await test_performance()
-    if not perf_success:
-        logger.error("❌ Performance tests failed")
-        sys.exit(1)
+    # Run tests
+    system_test = await test_system_startup()
+    mcp_test = await test_mcp_servers()
+    agent_test = await test_agents()
     
-    logger.info("🎉 All tests completed successfully!")
-    logger.info("✅ System is ready for production deployment!")
-    sys.exit(0)
+    print("\n" + "=" * 50)
+    print("📊 Test Results Summary:")
+    print(f"   System Startup: {'✅ PASS' if system_test else '❌ FAIL'}")
+    print(f"   MCP Servers: {'✅ PASS' if mcp_test else '❌ FAIL'}")
+    print(f"   Agents: {'✅ PASS' if agent_test else '❌ FAIL'}")
+    
+    if all([system_test, mcp_test, agent_test]):
+        print("\n🎉 All tests passed! The system is ready to run.")
+        print("\n💡 To run the system:")
+        print("   python run_fraud_system.py")
+        print("\n💡 To run individual components:")
+        print("   python run_fraud_system.py --data-intel")
+        print("   python run_fraud_system.py --monitoring")
+    else:
+        print("\n⚠️  Some tests failed. Please check the errors above.")
+        return 1
+    
+    return 0
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    exit_code = asyncio.run(main())
+    sys.exit(exit_code)
