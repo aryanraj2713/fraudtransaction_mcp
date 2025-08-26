@@ -1,0 +1,3 @@
+[console_scripts]
+fraud-detection-server = api.fraud_detection_api:main
+mcp-server = mcp_servers.data_intelligence_server:main
