@@ -1,0 +1,101 @@
+test_id,transaction_id,test_category,fraud_label,expected_decision,actual_decision,expected_risk_min,expected_risk_max,actual_risk_score,processing_time_ms,confidence_score,agents_participated,pattern_agent_decision,risk_agent_decision,coordination_decision,decision_correct,risk_score_in_range,false_positive,false_negative,test_passed,reasoning_summary,timestamp
+VAL_LEGIT_0011,legit_0011,legitimate,False,approve,approve,0.0,0.3,0.17405991943605237,101.33790969848633,0.7763686896236619,1,N/A,N/A,approve,True,True,False,False,True,"Low fraud risk. Protective factors: Low velocity risk, Low amount risk, No strong fraud pattern matches detected",2025-08-26T17:11:32.820695
+VAL_VELOCITY_0006,velocity_0006,velocity_fraud,True,decline,review,0.8,1.0,0.5,101.11308097839355,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:32.820719
+VAL_CARD_TEST_0016,card_test_0016,card_testing,True,decline,review,0.7,1.0,0.5,101.0129451751709,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:32.820731
+VAL_CARD_TEST_0008,card_test_0008,card_testing,True,decline,review,0.7,1.0,0.5,100.93021392822266,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:32.820739
+VAL_HIGH_VALUE_0008,high_value_0008,high_value_fraud,True,review,review,0.4,0.8,0.5,100.85701942443848,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:32.820746
+VAL_CARD_TEST_0015,card_test_0015,card_testing,True,decline,review,0.7,1.0,0.5,100.79073905944824,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:32.820754
+VAL_HIGH_VALUE_0005,high_value_0005,high_value_fraud,True,review,review,0.4,0.8,0.5,100.72612762451172,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:32.820760
+VAL_HIGH_VALUE_0009,high_value_0009,high_value_fraud,True,review,review,0.4,0.8,0.5,100.66008567810059,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:32.820767
+VAL_HIGH_VALUE_0001,high_value_0001,high_value_fraud,True,review,review,0.4,0.8,0.5,100.58903694152832,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:32.820773
+VAL_LEGIT_0025,legit_0025,legitimate,False,approve,review,0.0,0.3,0.5,100.5239486694336,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:32.820779
+VAL_LEGIT_0003,legit_0003,legitimate,False,approve,approve,0.0,0.3,0.20536572374577128,101.35889053344727,0.6837073241424705,1,N/A,N/A,approve,True,True,False,False,True,"Low fraud risk. Protective factors: Low amount risk, Transaction follows normal statistical patterns, Low account risk",2025-08-26T17:11:33.924274
+VAL_LEGIT_0028,legit_0028,legitimate,False,approve,review,0.0,0.3,0.5,101.10807418823242,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:33.924291
+VAL_TAKEOVER_0004,takeover_0004,account_takeover,True,decline,review,0.6,0.9,0.5,101.0141372680664,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:33.924301
+VAL_HIGH_VALUE_0002,high_value_0002,high_value_fraud,True,review,review,0.4,0.8,0.5,100.93998908996582,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:33.924309
+VAL_EDGE_BOUNDARY_VALUES_0004,edge_boundary_0004,edge_case_boundary_values,True,review,review,0.4,0.8,0.5,100.86202621459961,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:33.924318
+VAL_HIGH_VALUE_0006,high_value_0006,high_value_fraud,True,review,review,0.4,0.8,0.5,100.79097747802734,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:33.924325
+VAL_VELOCITY_0005,velocity_0005,velocity_fraud,True,decline,review,0.8,1.0,0.5,100.70991516113281,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:33.924333
+VAL_EDGE_MISSING_DATA_0000,edge_missing_0000,edge_case_missing_data,False,review,review,0.3,0.7,0.5,100.63505172729492,0.0,0,N/A,N/A,N/A,True,True,True,False,False,N/A,2025-08-26T17:11:33.924342
+VAL_TAKEOVER_0009,takeover_0009,account_takeover,True,decline,review,0.6,0.9,0.5,100.5558967590332,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:33.924349
+VAL_VELOCITY_0000,velocity_0000,velocity_fraud,True,decline,review,0.8,1.0,0.5,100.4788875579834,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:33.924357
+VAL_TAKEOVER_0001,takeover_0001,account_takeover,True,decline,approve,0.6,0.9,0.2693219696969697,101.35698318481445,0.6801669965716189,1,N/A,N/A,approve,False,False,False,True,False,"Low fraud risk. Protective factors: Low amount risk, Transaction follows normal statistical patterns, Low account risk",2025-08-26T17:11:35.027918
+VAL_LEGIT_0032,legit_0032,legitimate,False,approve,review,0.0,0.3,0.5,101.10902786254883,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:35.027936
+VAL_LEGIT_0014,legit_0014,legitimate,False,approve,review,0.0,0.3,0.5,101.02295875549316,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:35.027946
+VAL_LEGIT_0005,legit_0005,legitimate,False,approve,review,0.0,0.3,0.5,100.93903541564941,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:35.027955
+VAL_VELOCITY_0004,velocity_0004,velocity_fraud,True,decline,review,0.8,1.0,0.5,100.86297988891602,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:35.027964
+VAL_LEGIT_0015,legit_0015,legitimate,False,approve,review,0.0,0.3,0.5,100.7852554321289,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:35.027973
+VAL_CARD_TEST_0011,card_test_0011,card_testing,True,decline,review,0.7,1.0,0.5,100.71206092834473,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:35.027983
+VAL_HIGH_VALUE_0000,high_value_0000,high_value_fraud,True,review,review,0.4,0.8,0.5,100.62789916992188,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:35.027992
+VAL_LEGIT_0019,legit_0019,legitimate,False,approve,review,0.0,0.3,0.5,100.55994987487793,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:35.028000
+VAL_LEGIT_0024,legit_0024,legitimate,False,approve,review,0.0,0.3,0.5,100.48508644104004,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:35.028009
+VAL_VELOCITY_0001,velocity_0001,velocity_fraud,True,decline,approve,0.8,1.0,0.2973219696969697,101.36198997497559,0.6769783391642116,1,N/A,N/A,approve,False,False,False,True,False,"Low fraud risk. Protective factors: Low amount risk, Transaction follows normal statistical patterns, Low account risk",2025-08-26T17:11:36.131537
+VAL_TAKEOVER_0011,takeover_0011,account_takeover,True,decline,approve,0.6,0.9,0.22305991943605236,101.11188888549805,0.6831424164755138,1,N/A,N/A,approve,False,False,False,True,False,"Low fraud risk. Protective factors: Low amount risk, Transaction follows normal statistical patterns, Low account risk",2025-08-26T17:11:36.131555
+VAL_LEGIT_0023,legit_0023,legitimate,False,approve,review,0.0,0.3,0.5,101.01985931396484,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:36.131565
+VAL_CARD_TEST_0019,card_test_0019,card_testing,True,decline,review,0.7,1.0,0.5,100.93307495117188,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:36.131574
+VAL_CARD_TEST_0012,card_test_0012,card_testing,True,decline,review,0.7,1.0,0.5,100.85391998291016,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:36.131581
+VAL_VELOCITY_0008,velocity_0008,velocity_fraud,True,decline,review,0.8,1.0,0.5,100.78096389770508,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:36.131589
+VAL_HIGH_VALUE_0004,high_value_0004,high_value_fraud,True,review,review,0.4,0.8,0.5,100.7080078125,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:36.131597
+VAL_TAKEOVER_0006,takeover_0006,account_takeover,True,decline,review,0.6,0.9,0.5,100.6309986114502,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:36.131604
+VAL_LEGIT_0009,legit_0009,legitimate,False,approve,review,0.0,0.3,0.5,100.55232048034668,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:36.131611
+VAL_LEGIT_0016,legit_0016,legitimate,False,approve,review,0.0,0.3,0.5,100.46911239624023,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:36.131619
+VAL_LEGIT_0006,legit_0006,legitimate,False,approve,approve,0.0,0.3,0.26086363636363635,100.83580017089844,0.6805068041526375,1,N/A,N/A,approve,True,True,False,False,True,"Low fraud risk. Protective factors: Low amount risk, Transaction follows normal statistical patterns, Low account risk",2025-08-26T17:11:37.234665
+VAL_CARD_TEST_0018,card_test_0018,card_testing,True,decline,review,0.7,1.0,0.5,100.62313079833984,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:37.234684
+VAL_CARD_TEST_0017,card_test_0017,card_testing,True,decline,review,0.7,1.0,0.5,100.5401611328125,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:37.234694
+VAL_TAKEOVER_0000,takeover_0000,account_takeover,True,decline,review,0.6,0.9,0.5,100.46625137329102,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:37.234703
+VAL_VELOCITY_0003,velocity_0003,velocity_fraud,True,decline,review,0.8,1.0,0.5,100.39710998535156,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:37.234712
+VAL_HIGH_VALUE_0003,high_value_0003,high_value_fraud,True,review,review,0.4,0.8,0.5,100.33369064331055,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:37.234721
+VAL_LEGIT_0037,legit_0037,legitimate,False,approve,review,0.0,0.3,0.5,100.26979446411133,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:37.234728
+VAL_LEGIT_0004,legit_0004,legitimate,False,approve,review,0.0,0.3,0.5,100.28481483459473,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:37.234824
+VAL_LEGIT_0017,legit_0017,legitimate,False,approve,review,0.0,0.3,0.5,100.26788711547852,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:37.234878
+VAL_CARD_TEST_0007,card_test_0007,card_testing,True,decline,review,0.7,1.0,0.5,100.20303726196289,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:37.234888
+VAL_VELOCITY_0007,velocity_0007,velocity_fraud,True,decline,approve,0.8,1.0,0.2973219696969697,101.29833221435547,0.6769783391642116,1,N/A,N/A,approve,False,False,False,True,False,"Low fraud risk. Protective factors: Low amount risk, Transaction follows normal statistical patterns, Low account risk",2025-08-26T17:11:38.338177
+VAL_LEGIT_0039,legit_0039,legitimate,False,approve,approve,0.0,0.3,0.18105991943605237,101.0899543762207,0.775989638697736,1,N/A,N/A,approve,True,True,False,False,True,"Low fraud risk. Protective factors: Low velocity risk, Low amount risk, No strong fraud pattern matches detected",2025-08-26T17:11:38.338191
+VAL_CARD_TEST_0002,card_test_0002,card_testing,True,decline,review,0.7,1.0,0.5,101.00412368774414,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:38.338199
+VAL_LEGIT_0007,legit_0007,legitimate,False,approve,review,0.0,0.3,0.5,100.92592239379883,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:38.338206
+VAL_LEGIT_0030,legit_0030,legitimate,False,approve,review,0.0,0.3,0.5,100.85296630859375,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:38.338214
+VAL_LEGIT_0013,legit_0013,legitimate,False,approve,review,0.0,0.3,0.5,100.77595710754395,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:38.338220
+VAL_TAKEOVER_0005,takeover_0005,account_takeover,True,decline,review,0.6,0.9,0.5,100.70085525512695,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:38.338227
+VAL_LEGIT_0038,legit_0038,legitimate,False,approve,review,0.0,0.3,0.5,100.62193870544434,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:38.338235
+VAL_LEGIT_0033,legit_0033,legitimate,False,approve,review,0.0,0.3,0.5,100.54588317871094,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:38.338242
+VAL_LEGIT_0010,legit_0010,legitimate,False,approve,review,0.0,0.3,0.5,100.46696662902832,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:38.338248
+VAL_TAKEOVER_0012,takeover_0012,account_takeover,True,decline,approve,0.6,0.9,0.2853636363636364,100.70562362670898,0.6814009013748598,1,N/A,N/A,approve,False,False,False,True,False,"Low fraud risk. Protective factors: Low amount risk, Transaction follows normal statistical patterns, Low account risk",2025-08-26T17:11:39.441020
+VAL_HIGH_VALUE_0007,high_value_0007,high_value_fraud,True,review,review,0.4,0.8,0.5,100.52108764648438,0.0,0,N/A,N/A,N/A,True,True,False,False,True,N/A,2025-08-26T17:11:39.441037
+VAL_CARD_TEST_0005,card_test_0005,card_testing,True,decline,review,0.7,1.0,0.5,100.43907165527344,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:39.441045
+VAL_TAKEOVER_0008,takeover_0008,account_takeover,True,decline,review,0.6,0.9,0.5,100.35490989685059,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:39.441051
+VAL_LEGIT_0002,legit_0002,legitimate,False,approve,review,0.0,0.3,0.5,100.2800464630127,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:39.441056
+VAL_CARD_TEST_0010,card_test_0010,card_testing,True,decline,review,0.7,1.0,0.5,100.21686553955078,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:39.441087
+VAL_EDGE_MISSING_DATA_0001,edge_missing_0001,edge_case_missing_data,False,review,review,0.3,0.7,0.5,100.15392303466797,0.0,0,N/A,N/A,N/A,True,True,True,False,False,N/A,2025-08-26T17:11:39.441109
+VAL_VELOCITY_0002,velocity_0002,velocity_fraud,True,decline,review,0.8,1.0,0.5,100.10766983032227,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:39.441148
+VAL_LEGIT_0026,legit_0026,legitimate,False,approve,review,0.0,0.3,0.5,100.10099411010742,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:39.441228
+VAL_CARD_TEST_0013,card_test_0013,card_testing,True,decline,review,0.7,1.0,0.5,100.08978843688965,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:39.441311
+VAL_CARD_TEST_0006,card_test_0006,card_testing,True,decline,approve,0.7,1.0,0.06999999999999998,101.3498306274414,0.74234375,1,N/A,N/A,approve,False,False,False,True,False,"Low fraud risk. Protective factors: Transaction follows normal statistical patterns, No strong fraud pattern matches detected, Multi-agent analysis (2 agents)",2025-08-26T17:11:40.544819
+VAL_CARD_TEST_0000,card_test_0000,card_testing,True,decline,approve,0.7,1.0,0.06999999999999998,101.09210014343262,0.7423593749999999,1,N/A,N/A,approve,False,False,False,True,False,"Low fraud risk. Protective factors: Transaction follows normal statistical patterns, No strong fraud pattern matches detected, Multi-agent analysis (2 agents)",2025-08-26T17:11:40.544835
+VAL_LEGIT_0021,legit_0021,legitimate,False,approve,review,0.0,0.3,0.5,101.00007057189941,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:40.544844
+VAL_LEGIT_0035,legit_0035,legitimate,False,approve,review,0.0,0.3,0.5,100.92282295227051,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:40.544853
+VAL_LEGIT_0022,legit_0022,legitimate,False,approve,review,0.0,0.3,0.5,100.83723068237305,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:40.544860
+VAL_CARD_TEST_0014,card_test_0014,card_testing,True,decline,review,0.7,1.0,0.5,100.7542610168457,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:40.544868
+VAL_LEGIT_0012,legit_0012,legitimate,False,approve,review,0.0,0.3,0.5,100.67892074584961,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:40.544875
+VAL_CARD_TEST_0009,card_test_0009,card_testing,True,decline,review,0.7,1.0,0.5,100.6019115447998,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:40.544883
+VAL_CARD_TEST_0001,card_test_0001,card_testing,True,decline,review,0.7,1.0,0.5,100.52919387817383,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:40.544890
+VAL_LEGIT_0036,legit_0036,legitimate,False,approve,review,0.0,0.3,0.5,100.4478931427002,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:40.544897
+VAL_TAKEOVER_0003,takeover_0003,account_takeover,True,decline,approve,0.6,0.9,0.28682196969696966,101.34625434875488,0.6812462789790263,1,N/A,N/A,approve,False,False,False,True,False,"Low fraud risk. Protective factors: Low amount risk, Transaction follows normal statistical patterns, Low account risk",2025-08-26T17:11:41.648511
+VAL_LEGIT_0029,legit_0029,legitimate,False,approve,review,0.0,0.3,0.5,101.0899543762207,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:41.648528
+VAL_VELOCITY_0009,velocity_0009,velocity_fraud,True,decline,review,0.8,1.0,0.5,101.01079940795898,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:41.648537
+VAL_EDGE_MISSING_DATA_0003,edge_missing_0003,edge_case_missing_data,False,review,review,0.3,0.7,0.5,100.93092918395996,0.0,0,N/A,N/A,N/A,True,True,True,False,False,N/A,2025-08-26T17:11:41.648545
+VAL_LEGIT_0001,legit_0001,legitimate,False,approve,review,0.0,0.3,0.5,100.83198547363281,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:41.648553
+VAL_LEGIT_0027,legit_0027,legitimate,False,approve,review,0.0,0.3,0.5,100.75807571411133,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:41.648561
+VAL_TAKEOVER_0007,takeover_0007,account_takeover,True,decline,review,0.6,0.9,0.5,100.6920337677002,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:41.648568
+VAL_TAKEOVER_0002,takeover_0002,account_takeover,True,decline,review,0.6,0.9,0.5,100.62074661254883,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:41.648575
+VAL_LEGIT_0031,legit_0031,legitimate,False,approve,review,0.0,0.3,0.5,100.55303573608398,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:41.648584
+VAL_LEGIT_0018,legit_0018,legitimate,False,approve,review,0.0,0.3,0.5,100.51608085632324,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:41.648592
+VAL_LEGIT_0034,legit_0034,legitimate,False,approve,approve,0.0,0.3,0.26786363636363636,101.29523277282715,0.680336086560045,1,N/A,N/A,approve,True,True,False,False,True,"Low fraud risk. Protective factors: Low amount risk, Transaction follows normal statistical patterns, Low account risk",2025-08-26T17:11:42.751748
+VAL_CARD_TEST_0004,card_test_0004,card_testing,True,decline,review,0.7,1.0,0.5,101.11188888549805,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:42.751765
+VAL_EDGE_MISSING_DATA_0002,edge_missing_0002,edge_case_missing_data,False,review,review,0.3,0.7,0.5,101.0749340057373,0.0,0,N/A,N/A,N/A,True,True,True,False,False,N/A,2025-08-26T17:11:42.751774
+VAL_TAKEOVER_0013,takeover_0013,account_takeover,True,decline,review,0.6,0.9,0.5,101.04227066040039,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:42.751783
+VAL_TAKEOVER_0014,takeover_0014,account_takeover,True,decline,review,0.6,0.9,0.5,101.0129451751709,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:42.751792
+VAL_CARD_TEST_0003,card_test_0003,card_testing,True,decline,review,0.7,1.0,0.5,100.98099708557129,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:42.751802
+VAL_LEGIT_0000,legit_0000,legitimate,False,approve,review,0.0,0.3,0.5,100.9521484375,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:42.751809
+VAL_LEGIT_0020,legit_0020,legitimate,False,approve,review,0.0,0.3,0.5,100.91900825500488,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:42.751817
+VAL_LEGIT_0008,legit_0008,legitimate,False,approve,review,0.0,0.3,0.5,100.88706016540527,0.0,0,N/A,N/A,N/A,False,False,True,False,False,N/A,2025-08-26T17:11:42.751825
+VAL_TAKEOVER_0010,takeover_0010,account_takeover,True,decline,review,0.6,0.9,0.5,100.8450984954834,0.0,0,N/A,N/A,N/A,False,False,False,False,False,N/A,2025-08-26T17:11:42.751832

@@ -1,0 +1,77 @@
+{
+  "summary": {
+    "total_tests": 100,
+    "passed_tests": 20,
+    "pass_rate": 0.2,
+    "decision_accuracy": 0.2,
+    "risk_score_accuracy": 0.2,
+    "false_positive_rate": 0.39,
+    "false_negative_rate": 0.08,
+    "avg_processing_time_ms": 100.76038599014282,
+    "avg_confidence_score": 0.09161524939905995
+  },
+  "category_breakdown": {
+    "legitimate": {
+      "total": 40,
+      "pass_rate": 0.125,
+      "decision_accuracy": 0.125,
+      "risk_accuracy": 0.125,
+      "false_positive_rate": 0.875,
+      "false_negative_rate": 0.0
+    },
+    "velocity_fraud": {
+      "total": 10,
+      "pass_rate": 0.0,
+      "decision_accuracy": 0.0,
+      "risk_accuracy": 0.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.2
+    },
+    "card_testing": {
+      "total": 20,
+      "pass_rate": 0.0,
+      "decision_accuracy": 0.0,
+      "risk_accuracy": 0.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.1
+    },
+    "high_value_fraud": {
+      "total": 10,
+      "pass_rate": 1.0,
+      "decision_accuracy": 1.0,
+      "risk_accuracy": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0
+    },
+    "account_takeover": {
+      "total": 15,
+      "pass_rate": 0.0,
+      "decision_accuracy": 0.0,
+      "risk_accuracy": 0.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.26666666666666666
+    },
+    "edge_case_boundary_values": {
+      "total": 1,
+      "pass_rate": 1.0,
+      "decision_accuracy": 1.0,
+      "risk_accuracy": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0
+    },
+    "edge_case_missing_data": {
+      "total": 4,
+      "pass_rate": 1.0,
+      "decision_accuracy": 1.0,
+      "risk_accuracy": 1.0,
+      "false_positive_rate": 1.0,
+      "false_negative_rate": 0.0
+    }
+  },
+  "performance_stats": {
+    "min_processing_time_ms": 100.08978843688965,
+    "max_processing_time_ms": 101.36198997497559,
+    "p95_processing_time_ms": 101.33832693099976,
+    "avg_agents_participated": 0.13
+  }
+}
