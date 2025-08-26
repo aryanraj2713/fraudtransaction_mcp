@@ -113,7 +113,13 @@ class MetricsCollector:
             if timestamp is None:
                 timestamp_dt = datetime.now()
             else:
-                timestamp_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                if isinstance(timestamp, str):
+                    timestamp_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                elif isinstance(timestamp, datetime):
+                    timestamp_dt = timestamp
+                else:
+                    logger.error(f"Invalid timestamp type: {type(timestamp)}")
+                    timestamp_dt = datetime.now()
             
             metric = PerformanceMetric(
                 metric_name=metric_name,

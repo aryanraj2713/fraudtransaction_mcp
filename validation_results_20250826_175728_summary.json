@@ -1,0 +1,35 @@
+{
+  "summary": {
+    "total_tests": 100,
+    "passed_tests": 80,
+    "pass_rate": 0.8,
+    "decision_accuracy": 0.8,
+    "risk_score_accuracy": 0.8,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": 0.0,
+    "avg_processing_time_ms": 11.098065376281738,
+    "avg_confidence_score": 0.7272736802465074
+  },
+  "performance_stats": {
+    "min_processing_time_ms": 4.534006118774414,
+    "max_processing_time_ms": 57.58810043334961,
+    "p95_processing_time_ms": 17.60101318359375,
+    "avg_agents_participated": 3.0
+  },
+  "category_breakdown": {
+    "generated_fraud": {
+      "total": 20,
+      "pass_rate": 0.0,
+      "decision_accuracy": 0.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0
+    },
+    "generated_legitimate": {
+      "total": 80,
+      "pass_rate": 1.0,
+      "decision_accuracy": 1.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0
+    }
+  }
+}

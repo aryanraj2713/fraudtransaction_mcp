@@ -126,7 +126,7 @@ async def run_validation_suite(args):
         start_time = time.time()
         results = await validation_runner.run_validation_suite(
             test_cases, 
-            concurrent_limit=args.concurrent
+            concurrent_limit=1  # Reduce to 1 to avoid agent busy errors
         )
         execution_time = time.time() - start_time
         

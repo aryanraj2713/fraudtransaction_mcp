@@ -484,6 +484,9 @@ class CoordinationAgent(BaseFraudDetectionAgent):
                 "agents_coordinated": len(self.registered_agents)
             }
             
+            # Store workflow result in evidence for later extraction
+            analysis_results["evidence"] = workflow_result
+            
             # Update collaboration history
             self.collaboration_history.append({
                 "transaction_id": transaction_id,

@@ -243,7 +243,9 @@ class ReasoningEngine:
                 "risk_factors": risk_factors,
                 "protective_factors": protective_factors,
                 "reasoning_chain": reasoning_chain,
-                "knowledge_base_patterns_used": len(kb_insights)
+                "knowledge_base_patterns_used": len(kb_insights),
+                # Include any evidence from analysis results (like coordination workflow results)
+                **analysis_results.get("evidence", {})
             },
             processing_time_ms=processing_time,
             timestamp=datetime.now(),

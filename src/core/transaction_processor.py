@@ -490,11 +490,66 @@ class RealTimeFraudProcessor:
                 try:
                     # Process through coordination agent (which manages other agents)
                     circuit_breaker = self.circuit_breakers[coordinator.agent_id]
-                    decision = await circuit_breaker.call(
+                    coordination_decision = await circuit_breaker.call(
                         coordinator.process_transaction,
                         transaction
                     )
-                    agent_decisions.append(decision)
+                    
+                    # Extract individual agent decisions from coordination result
+                    logger.debug(f"Coordination decision structure: {type(coordination_decision)}")
+                    logger.debug(f"Coordination decision attributes: {dir(coordination_decision)}")
+                    
+                    # Try to extract individual agent decisions from evidence
+                    if hasattr(coordination_decision, 'evidence') and coordination_decision.evidence:
+                        workflow_result = coordination_decision.evidence
+                        individual_decisions_list = []
+                        
+                        # Handle consensus case - decisions in 'individual_decisions'
+                        if 'individual_decisions' in workflow_result:
+                            individual_decisions_list = workflow_result['individual_decisions']
+                            logger.info(f"Found {len(individual_decisions_list)} individual agent decisions (consensus case)")
+                        
+                        # Handle single decision case - decisions in 'all_decisions'
+                        elif 'all_decisions' in workflow_result:
+                            individual_decisions_list = workflow_result['all_decisions']
+                            logger.info(f"Found {len(individual_decisions_list)} individual agent decisions (single decision case)")
+                        
+                        # Also check nested consensus structure
+                        elif 'consensus' in workflow_result and 'individual_decisions' in workflow_result['consensus']:
+                            individual_decisions_list = workflow_result['consensus']['individual_decisions']
+                            logger.info(f"Found {len(individual_decisions_list)} individual agent decisions (nested consensus)")
+                        
+                        # Convert decision dictionaries to AgentDecision objects
+                        if individual_decisions_list:
+                            from agents.base_agent import AgentDecision
+                            for decision_dict in individual_decisions_list:
+                                try:
+                                    # Handle both direct AgentDecision dict and nested structures
+                                    if isinstance(decision_dict, dict):
+                                        individual_decision = AgentDecision(
+                                            agent_id=decision_dict.get('agent_id', 'unknown'),
+                                            decision_id=decision_dict.get('decision_id', f"decision_{uuid.uuid4().hex[:8]}"),
+                                            transaction_id=decision_dict.get('transaction_id', transaction_id),
+                                            decision_type=decision_dict.get('decision_type', 'review'),
+                                            risk_score=decision_dict.get('risk_score', 0.5),
+                                            confidence=decision_dict.get('confidence', 0.5),
+                                            reasoning=decision_dict.get('reasoning', []),
+                                            evidence=decision_dict.get('evidence', {}),
+                                            processing_time_ms=decision_dict.get('processing_time_ms', 0.0),
+                                            timestamp=datetime.fromisoformat(decision_dict['timestamp']) if isinstance(decision_dict.get('timestamp'), str) else decision_dict.get('timestamp', datetime.now()),
+                                            metadata=decision_dict.get('metadata', {})
+                                        )
+                                        agent_decisions.append(individual_decision)
+                                        logger.debug(f"Added individual decision from {decision_dict.get('agent_id', 'unknown')}")
+                                except Exception as e:
+                                    logger.error(f"Error converting individual decision: {e}")
+                        else:
+                            logger.warning("No individual agent decisions found in coordination workflow result")
+                    else:
+                        logger.warning("No evidence found in coordination decision")
+                    
+                    # Also add the coordination agent's decision
+                    agent_decisions.append(coordination_decision)
                     
                 finally:
                     self.load_balancer.release_agent(coordinator)

@@ -497,7 +497,7 @@ class DecisionMaker:
     def __init__(self):
         self.default_cost_matrix = {
             "false_positive_cost": 10.0,  # Cost of declining good transaction
-            "false_negative_cost": 100.0,  # Cost of approving fraud
+            "false_negative_cost": 120.0,  # Increase cost of approving fraud
             "review_cost": 5.0,  # Cost of human review
             "escalation_cost": 15.0  # Cost of escalation
         }
@@ -505,11 +505,11 @@ class DecisionMaker:
         self.default_business_rules = {
             "max_daily_amount": 10000,
             "max_transaction_count_daily": 100,
-            "require_review_above": 5000,
-            "auto_decline_above": 0.9,
-            "auto_approve_below": 0.1,
+            "require_review_above": 2000,   # lower review threshold
+            "auto_decline_above": 0.6,      # lower decline threshold
+            "auto_approve_below": 0.05,     # stricter auto-approve
             "high_risk_countries_decline": True,
-            "new_device_review_threshold": 0.3
+            "new_device_review_threshold": 0.2  # more cautious on new devices
         }
     
     async def make_decision(
