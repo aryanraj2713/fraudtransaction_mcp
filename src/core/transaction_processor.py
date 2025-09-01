@@ -566,13 +566,21 @@ class RealTimeFraudProcessor:
                             "overall_risk_score": best_decision.risk_score,
                             "confidence_score": best_decision.confidence,
                             "risk_factors": best_decision.reasoning,
-                            "transaction_id": transaction_id
+                            "transaction_id": transaction_id,
+                            # Pass through critical transaction fields for business rules
+                            "amount": transaction.get("amount", 0),
+                            "country": transaction.get("country", ""),
+                            "payment_method": transaction.get("payment_method", ""),
+                            "is_first_transaction": transaction.get("is_first_transaction", False),
+                            "account_age_days": transaction.get("account_age_days", 365)
                         }
                     }
                 )
                 mcp_server_calls["decision_engine"] = decision_result
                 
-                final_decision = decision_result.get("decision", {})
+                # Fix: The decision engine returns {'tool': 'make_decision', 'result': {'decision': {...}}}
+                final_decision = decision_result.get("result", {}).get("decision", {})
+                
                 risk_score = final_decision.get("risk_score", best_decision.risk_score)
                 decision_type = final_decision.get("decision", best_decision.decision_type)
                 confidence = final_decision.get("confidence", best_decision.confidence)

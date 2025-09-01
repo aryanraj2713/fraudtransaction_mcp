@@ -80,30 +80,30 @@ class RiskAssessor:
         }
         
         self.risk_factors_weights = {
-            # Velocity-based factors
-            "high_transaction_velocity": 0.15,
-            "unusual_time_pattern": 0.10,
-            "velocity_spike": 0.12,
+            # Velocity-based factors (increased)
+            "high_transaction_velocity": 0.25,
+            "unusual_time_pattern": 0.15,
+            "velocity_spike": 0.20,
             
-            # Amount-based factors
-            "unusual_amount": 0.18,
-            "round_amount_pattern": 0.05,
-            "amount_vs_history": 0.15,
+            # Amount-based factors (increased)
+            "unusual_amount": 0.30,
+            "round_amount_pattern": 0.08,
+            "amount_vs_history": 0.25,
             
-            # Geographic factors
-            "geographic_anomaly": 0.20,
-            "high_risk_location": 0.25,
-            "location_velocity": 0.10,
+            # Geographic factors (significantly increased)
+            "geographic_anomaly": 0.35,
+            "high_risk_location": 0.40,
+            "location_velocity": 0.20,
             
-            # Device and behavioral factors
-            "new_device": 0.08,
-            "suspicious_behavior": 0.12,
-            "device_fingerprint_anomaly": 0.15,
+            # Device and behavioral factors (increased)
+            "new_device": 0.15,
+            "suspicious_behavior": 0.20,
+            "device_fingerprint_anomaly": 0.25,
             
-            # Account factors
-            "new_account": 0.10,
-            "account_history_flags": 0.20,
-            "payment_method_risk": 0.12
+            # Account factors (increased)
+            "new_account": 0.20,
+            "account_history_flags": 0.35,
+            "payment_method_risk": 0.18
         }
     
     async def assess_risk(
@@ -506,8 +506,8 @@ class DecisionMaker:
             "max_daily_amount": 10000,
             "max_transaction_count_daily": 100,
             "require_review_above": 2000,   # lower review threshold
-            "auto_decline_above": 0.6,      # lower decline threshold
-            "auto_approve_below": 0.05,     # stricter auto-approve
+            "auto_decline_above": 0.7,      # higher decline threshold for fraud
+            "auto_approve_below": 0.4,      # more reasonable auto-approve threshold
             "high_risk_countries_decline": True,
             "new_device_review_threshold": 0.2  # more cautious on new devices
         }
@@ -597,11 +597,17 @@ class DecisionMaker:
             reasoning.append(f"Auto-decline: Risk score {overall_risk:.3f} exceeds threshold")
             return DecisionType.DECLINE, reasoning
         
-        # High-risk country auto-decline
+        # High-risk country auto-decline (more aggressive)
         high_risk_countries = ["XX", "YY", "ZZ"]  # Example
         if (business_rules.get("high_risk_countries_decline", False) and 
-            country in high_risk_countries and overall_risk > 0.3):
+            country in high_risk_countries and overall_risk > 0.15):  # Much lower threshold
             reasoning.append(f"Auto-decline: High-risk country {country} with elevated risk")
+            return DecisionType.DECLINE, reasoning
+        
+        # Crypto payment auto-decline (very high risk)
+        payment_method = risk_scores.get("payment_method", "")
+        if payment_method == "crypto" and overall_risk > 0.2:
+            reasoning.append(f"Auto-decline: Cryptocurrency payment with elevated risk")
             return DecisionType.DECLINE, reasoning
         
         # Auto-approve rules
